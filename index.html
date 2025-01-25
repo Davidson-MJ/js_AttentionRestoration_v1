@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jsPsych Experiment</title>
+  <!-- Load jsPsych CSS -->
+  <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+  <!-- Experiment container -->
+  <div id="jspsych-experiment"></div>
+  
+  <!-- Load jsPsych -->
+  <script src="https://unpkg.com/jspsych@7.3.3"></script>
+  
+  <!-- Load the html-keyboard-response plugin -->
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
+  
+  <!-- Load the html-button-response plugin -->
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.0"></script>
+
+  <!-- Experiment script -->
+  <script>
+    // Initialize jsPsych
+    const jsPsych = initJsPsych({
+      display_element: 'jspsych-experiment',
+    });
+
+    // Define the experiment timeline
+    const timeline = [];
+    
+    //Vis search parameters:
+    // Set the radius, minimum distance, and padding as percentages of the container size
+    const radiusPercentage = 80; // n% of the container width/height
+    const minDistancePercentage = 2; // n% minimum distance between stimuli
+    const containerPaddingPercentage = 2; // n% padding from the edges
+    const nTargs = 25; // Number of targets
+    const nRepeats = 1;
+    const digitDuration = 1000; // ms for the DSB task.
+    const nDigits= 5; // n for DSB
+    // messages with buttons (for trial progression)
+    const welcomeMessage= {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'Welcome to the Experiment! Please read the instructions carefully before continuing.',
+      choices: ['Continue'], //overwritten below
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+    };
+    
+    //exit message:
+    const exitMessage= {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'Thank you for your participation',
+      choices: ['Continue'],      
+    };
+    // getReady message (between vis searches.)
+    const getReadyMessage={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'Get ready for the next trial!',
+      choices: ['Continue'], //overwritten below
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+    };
+    
+    const DSBinstructions={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'Get ready for the next trial!',
+      choices: ['Continue'], //overwritten below
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+   
+    }
+
+
+    const recallInstructions={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'On the next screen, please enter the digits you saw in reverse order. e.g. if you saw 1,2,3 enter 3,2,1.',
+      choices: ['Continue'], //overwritten below
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+   
+    }
+    const singleSearchTrial={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: (() => {
+        // Generate positions for stimuli
+        const positions = generatePositions(nTargs + 1, window.innerWidth * 0.8, window.innerHeight * 0.8, radiusPercentage, minDistancePercentage, containerPaddingPercentage);
+        let stimulusHTML = `<div style="width: 80vw; height: 80vh; background-color: grey; position: relative; margin: auto;">`;
+
+        // Add targets and other stimuli with random rotation
+        for (let i = 0; i < nTargs; i++) {
+          const pos = positions[i];
+          const rotation = Math.random()*360 ; // Random rotation between -45 and +45 degrees
+          stimulusHTML += `<div style="position: absolute; top: ${pos.y}%; left: ${pos.x}%; font-size: 2vw; color: red; transform: rotate(${rotation}deg);">T</div>`;
+        }
+
+        // Add target with random rotation
+        const targetPos = positions[nTargs];
+        const targetRotation = Math.random() *360 ; // Random rotation for target
+        stimulusHTML += `<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: red; cursor: pointer; transform: rotate(${targetRotation}deg);">X</div>`;
+        stimulusHTML += '</div>';
+        return stimulusHTML; // Return the generated stimulus HTML
+        })(), // Call the function immediately to get the HTML content
+
+        choices: [], // No buttons, only clickable target
+        on_load: () => {
+          const startTime = performance.now();
+          document.getElementById('target').addEventListener('click', () => {
+            const endTime = performance.now();
+            const rt = endTime - startTime;
+
+            // Store the reaction time data
+            jsPsych.data.write({
+              trial_type: 'visual_search',
+              rt: rt,
+            });
+            jsPsych.finishTrial();
+          })
+        }
+      } // end single search trial.
+
+    // Define the Digit Span Backward task (with 1 digit shown at a time)
+    const digitSpanBackwardTask = {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '',
+      on_load: () => {
+        // Create a div element to hold the digits (centered on the screen)
+        const stimulusDiv = document.createElement('div');
+        stimulusDiv.id = 'digit-span-stimulus';
+        stimulusDiv.style.position = 'absolute';
+        stimulusDiv.style.top = '50%';
+        stimulusDiv.style.left = '50%';
+        stimulusDiv.style.transform = 'translate(-50%, -50%)';
+        stimulusDiv.style.fontSize = '5vw'; // Adjust font size to fit
+        stimulusDiv.style.fontWeight = 'bold';
+        stimulusDiv.style.textAlign = 'center';
+        document.body.appendChild(stimulusDiv);
+
+        // Generate a random sequence of 5 digits (or change this number as needed)
+        const digits = [];
+        for (let i = 0; i < nDigits; i++) {
+          digits.push(Math.floor(Math.random() * 10));  // Random digit between 0 and 9
+        }
+
+        // Store the digits for later comparison (in reverse order)
+        jsPsych.data.addProperties({ originalDigits: digits });
+
+        // Create the sequence of individual digits to display
+        let currentDigitIndex = 0;
+
+        const showNextDigit = () => {
+          if (currentDigitIndex < digits.length) {
+            // Display the current digit
+            stimulusDiv.innerHTML = digits[currentDigitIndex];
+            currentDigitIndex++;
+
+            // Show the next digit after 200 ms
+            setTimeout(showNextDigit, digitDuration);
+          } else {
+            //first clear the html: 
+            stimulusDiv.innerHTML = '';
+            // After showing all digits, move to the next task (recall)
+            jsPsych.finishTrial();
+          }
+        };
+
+        // Start displaying the digits
+        showNextDigit();
+      },
+      choices: [], // No response required yet (only showing digits)
+      trial_duration: digitDuration*nDigits,  // Each digit will display for Xms
+      on_finish: (data) => {
+        // After the digits are flashed, we store the correct reversed answer for later checking
+        const digits = jsPsych.data.get().last(1).values()[0].originalDigits;
+        data.reversedDigits = digits.reverse().join('');
+      }
+    };
+
+    const digitRecallTask = 
+    {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: 'Please recall the digits in reverse order:',
+      choices: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+      prompt: '<p>Click the numbers in the correct order.</p>',
+      on_load: () => 
+      {
+        // Get the reversed digits from the previous trial
+        const reversedDigits = jsPsych.data.get().last(1).values()[0].reversedDigits;
+        jsPsych.data.get().last(1).values()[0].correctAnswer = reversedDigits.join('');
+
+        console.log('prev digits were:', reversedDigits);
+
+        // Dynamically position buttons (1-9)
+        let buttonHTML = '';
+        for (let i = 0; i <= 9; i++) {
+          buttonHTML += `<button class="digit-button" style="font-size: 24px; width: 40px; height: 40px; margin: 5px;">${i}</button>`;
+        }
+        // Insert buttons into the page
+        document.querySelector('.jspsych-html-button-response-buttons').innerHTML = buttonHTML;
+      },
+      on_finish: (data) => 
+      {
+        // Store the user's responses in this array
+        const userResponse = [];
+        let clickedCount = 0;
+        
+        // Event listener for the buttons
+        const buttons = document.querySelectorAll('.digit-button');
+        
+        // We need to disable the trial from proceeding until nDigits are clicked
+        buttons.forEach(button => 
+        {
+          button.addEventListener('click', () => {
+          // Add digit to user response array
+          userResponse.push(button.innerText);
+          clickedCount++;
+
+          // Check if the required number of responses have been made
+          if (clickedCount === nDigits)
+          {
+            // Compare the user's response with the correct reversed digits
+            const correctAnswer = jsPsych.data.get().last(1).values()[0].correctAnswer;
+            const userAnswer = userResponse.join('');
+
+            // Check if the response is correct
+            if (userAnswer === correctAnswer) {
+              data.is_correct = true;
+            } else {
+              data.is_correct = false;
+            }
+            // Proceed to the next trial
+            jsPsych.finishTrial();
+          }
+          });
+        } );
+      }
+    };
+
+
+
+
+    // Add tasks to the timeline
+    timeline.push(welcomeMessage);
+    //timeline.push(singleSearchTrial);
+    //timeline.push(getReadyMessage);
+    timeline.push(DSBinstructions)
+    timeline.push(digitSpanBackwardTask);
+    timeline.push(recallInstructions)
+    timeline.push(digitRecallTask);
+    timeline.push(exitMessage);
+
+
+    
+    // Run the experiment
+    jsPsych.run(timeline);
+
+
+
+
+    //---------
+    // Function to generate positions within a container with percentage-based radius and padding
+    function generatePositions(n, containerWidth, containerHeight, radiusPercentage, minDistancePercentage, containerPaddingPercentage) {
+      const positions = [];
+      
+      // Convert the radius, minDistance, and padding to pixel values based on container size
+      const radius = Math.min(containerWidth, containerHeight) * (radiusPercentage / 100);
+      const minDistance = Math.min(containerWidth, containerHeight) * (minDistancePercentage / 100);
+      const containerPadding = Math.min(containerWidth, containerHeight) * (containerPaddingPercentage / 100);
+
+      while (positions.length < n) {
+        const angle = Math.random() * 2 * Math.PI;
+        const distance = Math.random() * radius;
+
+        // Calculate position relative to the center of the container
+        const x = 50 + (distance * Math.cos(angle) / containerWidth) * 100;
+        const y = 50 + (distance * Math.sin(angle) / containerHeight) * 100;
+
+        // Clamp positions within the container boundaries
+        const clampedX = Math.min(100 - containerPadding, Math.max(containerPadding, x));
+        const clampedY = Math.min(100 - containerPadding, Math.max(containerPadding, y));
+
+        let overlap = false;
+        for (let pos of positions) {
+          const dx = pos.x - clampedX;
+          const dy = pos.y - clampedY;
+          if (Math.sqrt(dx * dx + dy * dy) < minDistance) {
+            overlap = true;
+            break;
+          }
+        }
+
+        if (!overlap) positions.push({ x: clampedX, y: clampedY });
+      }
+
+      return positions;
+    } // end function
+
+  </script>
+</body>
+</html>
