@@ -9,14 +9,11 @@
 </head>
 <body>
   <!-- Experiment container -->
-  <div id="jspsych-experiment"></div>
-  
+  <div id="jspsych-experiment"></div>  
   <!-- Load jsPsych -->
   <script src="https://unpkg.com/jspsych@7.3.3"></script>
-  
   <!-- Load the html-keyboard-response plugin -->
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
-  
   <!-- Load the html-button-response plugin -->
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.0"></script>
 
@@ -30,6 +27,7 @@
     // Define the experiment timeline
     const timeline = [];
     
+    
     //Vis search parameters:
     // Set the radius, minimum distance, and padding as percentages of the container size
     const searchDiffulty =1; //[1,2] for easy hard.
@@ -37,15 +35,31 @@
     const minDistancePercentage = 2; // n% minimum distance between stimuli
     const containerPaddingPercentage = 2; // n% padding from the edges
     const nTargs = 25; // Number of targets
+    const searchtrialDuration = 2500 ; //ms
     const nRepeats = 5;
+    
+    //DSB parameters:
     const digitDuration = 1000; // ms for the DSB task.
     const nDigits= 5; // n for DSB
+
+    //nature scene parameters:
+    const nImages = 3; // will be called using 'images/photo_*.jpg'
+    const imgID=1; // [1,2,3]
+    const imgDuration = 8000; // ms.
+
     // messages with buttons (for trial progression)
     const welcomeMessage= {
       type: jsPsychHtmlButtonResponse,
-      stimulus: 'Welcome to the Experiment! Please read the instructions carefully before continuing.',
+      stimulus:  `
+      <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
+        Welcome to the experiment.<br><br>
+        <span style="color: green;">Please read the instructions carefully</span>.<br><br>
+        <span style="color: black;">Your first task is to search for either a red</span> <span style="color: red;"> "T" </span><br><br> 
+        or blue <span style="color: blue;"> "O" </span>.        
+      </div>
+      `,
       choices: ['Continue'], //overwritten below
-      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
     };
     
     //exit message:
@@ -64,11 +78,31 @@
     
     const DSBinstructions={
       type: jsPsychHtmlButtonResponse,
-      stimulus: 'On the next screen, you will be shown a sequence of numbers. e.g. 1,2,3,4. Your task is to remember the numbers in reverse order (4,3,2,1).',
+      stimulus: `
+      <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
+        On the next screen, you will be shown a sequence of numbers.<br><br>
+        e.g. <span style="color: blue;">1, 2, 3, 4</span>.<br><br>
+        Your task is to remember the numbers in reverse order:<br>
+        e.g. <span style="color: red;">4, 3, 2, 1</span>.
+      </div>
+      `,
       choices: ['Ready?'], //overwritten below
-      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', // Center the button
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', //  button near bottom
    
     }
+    const imageInstructions ={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `
+      <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
+        On the next screen, you will be shown an image of nature.<br><br>
+        Please view this image, the experiment will resume shortly.  </span><br><br>        
+      </div>
+      `,
+      choices: ['Ready?'], //overwritten below
+      button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">Continue</button>', //  button near bottom
+   
+    }
+
 
 
     const recallInstructions={
@@ -80,69 +114,55 @@
     }
 
 
-    const staticScene = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <img src="egphoto.jpg" 
-            style="width: 100vw; height: 100vh; object-fit: cover; border-radius: 30px; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);">
-      </div>
-    `,
-    choices: "NO_KEYS", // No response required
-    trial_duration: 7000, // Hold for 7 seconds (7000 ms)
-    on_load: () => {
-      console.log("Static scene loaded.");
-    },
-    };
+    
+    // const singleSearchTrial={
+    //   type: jsPsychHtmlButtonResponse,
+    //   stimulus: (() => {
+    //     // Generate positions for stimuli
+    //     const positions = generatePositions(nTargs + 1, window.innerWidth * 0.8, window.innerHeight * 0.8, radiusPercentage, minDistancePercentage, containerPaddingPercentage);
+    //     let stimulusHTML = `<div style="width: 80vw; height: 80vh; background-color: grey; position: relative; margin: auto;">`;
 
-    const singleSearchTrial={
-      type: jsPsychHtmlButtonResponse,
-      stimulus: (() => {
-        // Generate positions for stimuli
-        const positions = generatePositions(nTargs + 1, window.innerWidth * 0.8, window.innerHeight * 0.8, radiusPercentage, minDistancePercentage, containerPaddingPercentage);
-        let stimulusHTML = `<div style="width: 80vw; height: 80vh; background-color: grey; position: relative; margin: auto;">`;
+    //     // Add targets and other stimuli with random rotation
+    //     for (let i = 0; i < nTargs; i++) {
+    //       const pos = positions[i];
+    //       const rotation = Math.random()*360 ; // Random rotation between -45 and +45 degrees
+    //       stimulusHTML += `<div style="position: absolute; top: ${pos.y}%; left: ${pos.x}%; font-size: 2vw; color: red; transform: rotate(${rotation}deg);">X</div>`;
+    //     }
 
-        // Add targets and other stimuli with random rotation
-        for (let i = 0; i < nTargs; i++) {
-          const pos = positions[i];
-          const rotation = Math.random()*360 ; // Random rotation between -45 and +45 degrees
-          stimulusHTML += `<div style="position: absolute; top: ${pos.y}%; left: ${pos.x}%; font-size: 2vw; color: red; transform: rotate(${rotation}deg);">X</div>`;
-        }
-
-        // Add single target with random rotation
-        const targetPos = positions[nTargs];
-        const targetRotation = Math.random() *360 ; // Random rotation for target
+    //     // Add single target with random rotation
+    //     const targetPos = positions[nTargs];
+    //     const targetRotation = Math.random() *360 ; // Random rotation for target
         
-        // define html based on difficulty:
-        if (searchDiffulty == 2){
-          //search for red T
-          searchTargHtml =`<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: red; cursor: pointer; transform: rotate(${targetRotation}deg);">T</div>`; 
-        }else {
-          //search for blue O
-          searchTargHtml =`<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: blue; cursor: pointer; transform: rotate(${targetRotation}deg);">O</div>`; 
-        }
+    //     // define html based on difficulty:
+    //     if (searchDiffulty == 2){
+    //       //search for red T
+    //       searchTargHtml =`<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: red; cursor: pointer; transform: rotate(${targetRotation}deg);">T</div>`; 
+    //     }else {
+    //       //search for blue O
+    //       searchTargHtml =`<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: blue; cursor: pointer; transform: rotate(${targetRotation}deg);">O</div>`; 
+    //     }
 
-        stimulusHTML += searchTargHtml;
-        stimulusHTML += '</div>';
-        return stimulusHTML; // Return the generated stimulus HTML
-        })(), // Call the function immediately to get the HTML content
+    //     stimulusHTML += searchTargHtml;
+    //     stimulusHTML += '</div>';
+    //     return stimulusHTML; // Return the generated stimulus HTML
+    //     })(), // Call the function immediately to get the HTML content
 
-        choices: [], // No buttons, only clickable target
-        on_load: () => {
-          const startTime = performance.now();
-          document.getElementById('target').addEventListener('click', () => {
-            const endTime = performance.now();
-            const rt = endTime - startTime;
+    //     choices: [], // No buttons, only clickable target
+    //     on_load: () => {
+    //       const startTime = performance.now();
+    //       document.getElementById('target').addEventListener('click', () => {
+    //         const endTime = performance.now();
+    //         const rt = endTime - startTime;
 
-            // Store the reaction time data
-            jsPsych.data.write({
-              trial_type: 'visual_search',
-              rt: rt,
-            });
-            jsPsych.finishTrial();
-          })
-        }
-      } // end single search trial.
+    //         // Store the reaction time data
+    //         jsPsych.data.write({
+    //           trial_type: 'visual_search',
+    //           rt: rt,
+    //         });
+    //         jsPsych.finishTrial();
+    //       })
+    //     }
+    //   } // end single search trial.
 
     // Define the Digit Span Backward task (with 1 digit shown at a time)
     const digitSpanBackwardTask = {
@@ -266,34 +286,6 @@
 
 
 
-
-
-    // Add tasks to the timeline
-    
-    timeline.push(welcomeMessage);
-    const searchDifficultarray= [1,2,1,2,1];
-    for (itrial=0; itrial<=nRepeats;itrial++ ) {
-      searchDifficulty = searchDifficultarray[itrial];
-      timeline.push(createSingleSearchTrial(searchDifficulty)); // Example for 8 distractors, hard difficulty
-      timeline.push(getReadyMessage);
-    }
-    
-    timeline.push(DSBinstructions);
-    timeline.push(digitSpanBackwardTask);
-    timeline.push(recallInstructions);
-    timeline.push(digitRecallTask);
-    timeline.push(staticScene);
-
-    timeline.push(exitMessage);
-
-
-    
-    // Run the experiment
-    jsPsych.run(timeline);
-
-
-
-
     //---------
     // Function to generate positions within a container with percentage-based radius and padding
     function generatePositions(n, containerWidth, containerHeight, radiusPercentage, minDistancePercentage, containerPaddingPercentage) {
@@ -332,64 +324,154 @@
       return positions;
     } // end function
 
-    function createSingleSearchTrial(searchDifficulty) {
+
+    function callSingleImageTrial(imgID) {
+      return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: `
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <img src="images/photo_${imgID}.jpg" 
+              style="width: 100vw; height: 100vh; object-fit: cover; border-radius: 30px; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);">
+        </div>`,
+        
+      choices: "NO_KEYS", // No response required
+      trial_duration: imgDuration, // Hold 
+      on_load: () => {
+      console.log("Static scene loaded.");
+        },
+      }
+    }
+
+    function createVisualSearchTrial(searchDifficulty) {
     return {
     type: jsPsychHtmlButtonResponse,
     stimulus: (() => {
       // Generate positions for stimuli
-      const positions = generatePositions(
-        nTargs + 1,
-        window.innerWidth * 0.8,
-        window.innerHeight * 0.8,
-        radiusPercentage,
-        minDistancePercentage,
-        containerPaddingPercentage
-      );
-
+      const positions = generatePositions(nTargs + 1, window.innerWidth * 0.8, window.innerHeight * 0.8, radiusPercentage, minDistancePercentage, containerPaddingPercentage);
       let stimulusHTML = `<div style="width: 80vw; height: 80vh; background-color: grey; position: relative; margin: auto;">`;
 
-      // Add distractors with random rotation
+      // Add  distractors
       for (let i = 0; i < nTargs; i++) {
         const pos = positions[i];
-        const rotation = Math.random() * 360; // Random rotation
+        const rotation = Math.random() * 360;
         stimulusHTML += `<div style="position: absolute; top: ${pos.y}%; left: ${pos.x}%; font-size: 2vw; color: red; transform: rotate(${rotation}deg);">X</div>`;
       }
 
-      // Add target with random rotation
+      // Add the target
       const targetPos = positions[nTargs];
       const targetRotation = Math.random() * 360;
-      let searchTargHtml;
-
-      if (searchDifficulty === 2) {
-        // Hard difficulty: search for red T
-        searchTargHtml = `<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: red; cursor: pointer; transform: rotate(${targetRotation}deg);">T</div>`;
+      
+      if (searchDifficulty===1) {
+        //easy blue 'o'
+        stimulusHTML +=   `<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: blue; cursor: pointer; transform: rotate(${targetRotation}deg);">O</div>`;  
       } else {
-        // Easy difficulty: search for blue O
-        searchTargHtml = `<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: blue; cursor: pointer; transform: rotate(${targetRotation}deg);">O</div>`;
+        //difficult red t
+        stimulusHTML +=  `<div id="target" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; font-size: 2vw; color: red; cursor: pointer; transform: rotate(${targetRotation}deg);">T</div>`;  
       }
-
-      stimulusHTML += searchTargHtml;
+      
       stimulusHTML += '</div>';
       return stimulusHTML;
-    })(),
+      })(),
+      choices: [], // No buttons, only clickable target
+      on_load: () => {
+     // Progress bar setup
+      const progressBar = document.createElement('div');
+      progressBar.id = 'progress-bar';
+      progressBar.style.position = 'absolute';
+      progressBar.style.bottom = '5vh'; // Position at the bottom of the screen
+      progressBar.style.left = '10vw'; // Match the grey background's horizontal positioning (centered)
+      progressBar.style.width = '80vw'; // Match the grey background width
+      progressBar.style.height = '20px'; // Set height of the progress bar
+      progressBar.style.backgroundColor = '#ddd';
+      progressBar.style.borderRadius = '10px'; // Add rounded corners for style
+      progressBar.style.overflow = 'hidden'; // Ensure the inner bar doesn't overflow
 
-    choices: [], // No buttons, only clickable target
-    on_load: () => {
+      // Inner progress bar
+      progressBar.innerHTML = `
+        <div id="progress-fill" 
+            style="width: 100%; height: 100%; background-color: green; transition: width 0.05s linear;">
+        </div>`;
+      document.body.appendChild(progressBar);
+
+      // Decrease progress bar over time
+      
       const startTime = performance.now();
-      document.getElementById('target').addEventListener('click', () => {
-        const endTime = performance.now();
-        const rt = endTime - startTime;
+      const progressInterval = setInterval(() => {
+        const elapsedTime = performance.now() - startTime;
+        const remainingTime = Math.max(0, searchtrialDuration - elapsedTime);
+        const progressPercent = (remainingTime / searchtrialDuration) * 100;
+        document.getElementById('progress-fill').style.width = `${progressPercent}%`;
 
-        // Store the reaction time data
-        jsPsych.data.write({
-          trial_type: 'visual_search',
-          rt: rt,
-        });
-        jsPsych.finishTrial();
+        if (remainingTime <= 0) {
+          clearInterval(progressInterval);
+          document.body.removeChild(progressBar);
+          jsPsych.finishTrial({ rt: null, correct: false });
+        }
+      }, 50);
+
+      // Add click handler for the target
+      document.getElementById('target').addEventListener('click', () => {
+        clearInterval(progressInterval);
+        document.body.removeChild(progressBar);
+        jsPsych.finishTrial({ rt: performance.now() - startTime, correct: true });
       });
+
+    },
+    on_finish: (data) => {
+      // Log trial data
+      if (!data.rt) {
+        console.log('Timeout: No response.');
+      } else if (!data.correct) {
+        console.log('Incorrect response.');
+      } else {
+        console.log('Correct response in', data.rt, 'ms.');
+      }
     },
   };
 }
+
+
+  // create experiment structure. 
+
+
+
+    // Add tasks to the timeline
+    
+    
+    timeline.push(welcomeMessage);
+    
+    //start block 
+    const searchDifficultarray= [1,2,1,2,1]; //1 easy, 2 hard.
+    // Vissearch sequence
+    for (itrial=0; itrial<=nRepeats;itrial++ ) {
+      searchDifficulty = searchDifficultarray[itrial];
+      timeline.push(createVisualSearchTrial(searchDifficulty)); // Example for 8 distractors, hard difficulty
+      timeline.push(getReadyMessage);
+    }
+    //DSB-1 sequence
+    timeline.push(DSBinstructions);
+    timeline.push(digitSpanBackwardTask);
+    timeline.push(digitRecallTask);
+    //image sequence
+    timeline.push(imageInstructions);
+    timeline.push(callSingleImageTrial(imgID));
+    
+    //DSB-2 sequence
+    timeline.push(DSBinstructions);
+    timeline.push(digitSpanBackwardTask);
+    timeline.push(digitRecallTask);
+    //end block.
+
+    timeline.push(exitMessage);
+
+
+    
+    // Run the experiment
+    jsPsych.run(timeline);
+
+
+
+
 
 // Usage example: pushing multiple trials to the timeline
 // timeline.push(createSingleSearchTrial(8, 10, 5, 5, 2)); // Example for 8 distractors, hard difficulty
