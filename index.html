@@ -109,6 +109,26 @@
 
     // Message Components
     const messages = {
+
+      PIS : {
+      type: jsPsychHtmlButtonResponse,
+        stimulus: `
+          <div style="
+          font-size: 24px; 
+          font-weight: bold;
+          text-align: centre;
+          line-height: 2.2;"
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh; 
+          flex-direction: columnl;
+          ">
+            <br><br>Participant Information Sheet <br><br>[placeholder].<br>                       
+        `,
+        choices: ["I consent"],
+        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
+      },
       welcome: {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
@@ -133,6 +153,28 @@
         choices: ["Let's practice!"],
         button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
       },
+      practice: {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `
+        <div style="
+          font-size: 24px; 
+          font-weight: bold;
+          text-align: centre;
+          line-height: 2.2;"
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh; 
+          flex-direction: columnl;
+          ">          
+          <br><br>Practice Session</h2>
+          <p>Let's practice each task before starting the main experiment.</p>
+          <p>You'll try multiple practice trials of each task.</p> </div>
+        `,
+        choices: ["Start Pracitce"],
+        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
+      },
+
       getReady: {
         type: jsPsychHtmlButtonResponse,
         stimulus: '<br><br>Get ready for the next trial!',
@@ -158,7 +200,7 @@
         stimulus: `
           <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
             <br><br>On the next screen, you will be shown a sequence of numbers.<br><br>
-            The sequence will get longer if you perform well.<br><br>
+            <br><br>
             Your task is to remember the numbers in reverse order.<br>
             e.g. if you see <span style="color: blue;">1, 2, 3, 4</span>,<br>
             respond: <span style="color: red;">4, 3, 2, 1</span>
@@ -193,8 +235,8 @@
         type: jsPsychHtmlButtonResponse,
         stimulus: `
         <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
-        <br><br> Click to begin trial ${trial} of ${experimentParams.nTrials}, <br>
-        <br> Block  ${block} of ${experimentParams.nBlocks}, <br>
+        <br><br> Click to begin trial ${trial+1} of ${experimentParams.nTrials}, <br>
+        <br> Block  ${block+1} of ${experimentParams.nBlocks}, <br>
         </div>
         `,
         choices: ['Ready'], // 
@@ -424,7 +466,7 @@
           stimulusDiv.style.top = '50%';
           stimulusDiv.style.left = '50%';
           stimulusDiv.style.transform = 'translate(-50%, -50%)';
-          stimulusDiv.style.fontSize = '5vw';
+          stimulusDiv.style.fontSize = '15vw';
           stimulusDiv.style.fontWeight = 'bold';
           stimulusDiv.style.textAlign = 'center';
           document.body.appendChild(stimulusDiv);
@@ -580,17 +622,7 @@
       const practiceTrials = [];
 
       // Add practice instructions
-      practiceTrials.push({
-        type: jsPsychHtmlButtonResponse,
-        stimulus: `
-          <div style="text-align: center;">
-            <h2><br><br>Practice Session</h2>
-            <p>Let's practice each task before starting the main experiment.</p>
-            <p>You'll try multiple practice trials of each task.</p>
-          </div>
-        `,
-        choices: ['Start Practice']
-      });
+      practiceTrials.push(messages.practice);
       //add instructions for the visual search task. 
       practiceTrials.push(messages.VisSearchInstructions);
 
@@ -598,11 +630,7 @@
 
       for (let i = 0; i < experimentParams.nPracticeTrials; i++) {
         // Practice visual search
-        practiceTrials.push({
-          type: jsPsychHtmlButtonResponse,
-          stimulus: '<p>Practice Visual Search Trial</p>',
-          choices: ['Begin']
-        });
+        practiceTrials.push(messages.practiceTrials);
 
         practiceTrials.push(createEnhancedVisualSearchTrial(1)); // 1 of 2 difficulties.
         practiceTrials.push(createEnhancedVisualSearchTrial(2)); // 1 of 2 difficulties.
@@ -612,11 +640,12 @@
 
         // add instructions for the DSB task
         practiceTrials.push(messages.DSBinstructions);
-        //DSB
+        //DSB (*)min to max span)
         for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
           practiceTrials.push(messages.DSBinstructions);
           practiceTrials.push(createDigitSpanTask(iSpan));
           practiceTrials.push(createRecallTask());
+          practiceTrials.push(feedbackTrial);
         }
 
       }
@@ -632,16 +661,13 @@
           choices: ['Start Main Experiment']
         });
         return practiceTrials;
-      }
+        
+      } // end function gen practice trials
         
       
     
 
-    // If called, show text with feedback for recall task (e.g. correct! )
 
-    function showRecallFeedback() {
-
-    }
     // // Progress bar updater
     // function updateProgressBar(totalTrials, completedTrials) {
     //   const progress = (completedTrials / totalTrials) * 100;
@@ -689,6 +715,7 @@
       // Add preload
       timeline.push(preloadImages);
 
+      timeline.push(messages.PIS);
       //welcome Msg
       timeline.push(messages.welcome);
 
@@ -778,7 +805,7 @@
 
       timeline.push(messages.exit);
       return timeline;
-    }
+    } // end function (gen timeline)
     //// 
     // Run the enhanced experiment
 
