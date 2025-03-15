@@ -8,6 +8,9 @@
   <!--  Load jsPsych CSS -->
   <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
   <style>
+     body {
+            background-color: #808070;
+        }
     /* Custom styles for better visibility and responsiveness */
     .progress-container {
       position: fixed;
@@ -27,12 +30,47 @@
       border-radius: 10px;
       transition: width 0.3s ease;
     }
-
+    .experiment-text {
+      color: white;
+      font-size: 24 px;
+      /* adjust as needed, or update with pixelsperUnit*/
+      text-align: center;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .experiment-images {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+            /* uses viewport height or width */
+            background-color: #808070;
+    }
     .search-target {
       font-weight: bold;
       text-shadow: 0 0 3px white;
     }
-
+    .standard-button {
+      font-size: 20px;
+      padding: 15px 30px;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+    }
     @media (max-width: 768px) {
       .search-item {
         font-size: 4vw !important;
@@ -51,7 +89,8 @@
       }
     }
   </style>
-
+<!-- add to work with JATOS -->
+<script src="jatos.js"></script>
 </head>
 
 <body>
@@ -66,29 +105,80 @@
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.0"></script>
   <script src="https://unpkg.com/@jspsych/plugin-preload@1.1.2"></script>
   <script src="https://unpkg.com/@jspsych/plugin-resize@1.0.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-likert@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@1.0.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-call-function@1.1.2"></script>
+
+  
 
   <script>
 
     //Initialize JsPsych    
     const jsPsych = initJsPsych({
-      display_element: 'jspsych-experiment',
-      on_finish: function () {
-        console.log("Experiment finished!");
-      },
-    });
-    
-    
+        display_element: 'jspsych-experiment',
+        on_finish: function () {
+          console.log("Experiment finished!");
+          //retrieve data
+          const data = jsPsych.data.get();
+          // Generate CSV and JSON data
+          const csvData = data.csv();
+          // Added JSON data for JATOS GUI
+          const jsonData = data.json();
 
+          // if not in jatos, show the result on screen.
+          if (typeof jatos === 'undefined') {
+            //dev mode, local, (prob running in macbook/offline), show data on screen.
+            jsPsych.data.displayData(csvData);
+          } else { // upload to jatos and redirect afterwards.
+
+            //create and upload csv blob first:
+            const csvBlob = new Blob([csvData], { type: 'text/csv' });
+            jatos.uploadResultFile(csvBlob, "experiment-data.csv", function () {
+              console.log("File upload successful");
+              // Submit JSON data using callback approach
+              console.log("Submitting JSON data to JATOS...");
+
+              jatos.submitResultData(jsonData, function () {
+                console.log("JSON data submitted successfully");
+                // Get participant ID from URL (with defensive checks)
+                var pp_id = "DEFAULT_ID";
+                if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                  pp_id = jatos.urlQueryParameters.SONA_ID;
+                  debugLog(`SONA ID is ${pp_id}`);
+                } else {
+                  debugLog(`SONA ID not found, using default`);
+                }
+                // Create completion URL for receiving credit
+                var completion_url = "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=93&credit_token=2e1c89bde83e447b8a413df54c340722&survey_code=" + pp_id;
+                if (pp_id === "DEFAULT_ID") {
+                  completion_url = "http://127.0.0.1:9000/jatos/4/11/results";
+                }
+                // Only redirect after both file upload AND data submission
+                jatos.endStudyAndRedirect(completion_url);
+              },
+              );
+            }
+            );
+          }
+        }
+      });
+      
+    // a better function for debugging: shorthand for console.log()
+    function debugLog(message) {
+      console.log(`[${new Date().toISOString()}] ${message}`);
+    }
+    
+    let pixelsPerUnit= 150;// default to start with
+    
     // Set static and global experiment parameters
-    const experimentParams = {
+    let experimentParams = {
       // Block structure
-      nBlocks: 3,
-      nTrials: 3,
-      nPracticeTrials: 2, // this n is per type (DSB and vis Search)
+      nBlocks: 1,
+      nTrials: 1,
+      nPracticeTrials: 1, // this n is per type (there are 4 reps of DSB and vis Search within each)
 
       // Visual search parameters
-      searchDifficulty: 1, //[1 or 2], easy or hard
-      radiusPercentage: 80, // fill targets within this radius of the search array.
+      searchDifficulty: 1, //[1 or 2], easy or hard, updated dynamically below.      
       minDistancePercentage: 1, // min dist between elements.
       containerPaddingPercentage: 5, // reduced to avoid stack overflow.
       nTargs: 30,
@@ -107,101 +197,184 @@
       // Attention check parameters
       attentionCheckFrequency: 0.1, // 10% chance per trial
 
+      // also add some dynamic fields which we will update and save from
+      dyn_trialidx:0, //count in exp
+      dyn_trial:0, //count in block
+      dyn_block:0, //
+      dyn_VSD: 1, // visual search difficulty
+      dyn_VS_propcorrect: 0, //proportion of vis search targets found. 
+      dyn_VS_meanRT: 0,//visual search mean RT
+      dyn_DSBpre_propcorrect: 0, //the  proportion of sequences correct.
+      dyn_DSBpre_digitaccuracy: 0,//the number of digits correct.
+      dyn_DSBpre_maxspan: 0, // the max span correct.
+      dyn_imageID: 0, // image index/identifier.
+      dyn_DSBpost_propcorrect: 0, //the  proportion of sequences correct.      
+      dyn_DSBpost_digitaccuracy: 0, // the max span correct. 
+      dyn_DSBpost_maxspan: 0,//the number of digits correct.
 
     };
 
     // Message Components
     const messages = {
-
-      PIS : {
-      type: jsPsychHtmlButtonResponse,
-        stimulus: `
-          <div style="
-          font-size: 24px; 
-          font-weight: bold;
-          text-align: centre;
-          line-height: 2.2;"
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh; 
-          flex-direction: column;
-          ">
-            <br><br>Participant Information Sheet <br><br>[placeholder].<br>                       
-        `,
-        choices: ["I consent"],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
-      },
-      welcome: {
+      Welcome: {
         type: jsPsychHtmlButtonResponse,
-        stimulus: `
-          <div style="
-          font-size: 24px; 
-          font-weight: bold;
-          text-align: centre;
-          line-height: 2.2;"
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh; 
-          flex-direction: column;
-          ">
-            <br><br>Welcome to the experiment.<br>
-            <span style="color: green;">Please read the instructions carefully</span>.<br>
-            <span style="color: black;">There are two task types.<br><br> In the visual search task:<br> You must search the screen for either a red</span> 
-            <span style="color: red;">"T"</span> or blue <span style="color: blue;">"O"</span><br>
-            <span style="color: black;"> hidden among red <span style="color: red;">"X"</span></span>s.
+        stimulus: `<div class="experiment-text" style= "font-size: ${24 * pixelsPerUnit / 150}px;">
+          Welcome !! <br><br>
+          On the next screen you will be shown the Participant Information Sheet and Consent Form. <br><br> Please
+          read both carefully before confirming your participation.</div>`,
+        choices: ["continue"],
+        button_html: '<button class="standard-button">%choice%</button>',        
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `welcome_msg`;
+          data.task ='wecome';
+        }
+      },
+      
+      PISdoc: {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function () {
+          return `
+          <div style="display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0;">
+          <div style="width: 100vh; height: 80vh; border: 1px solid #ccc; background-color: white; margin: 40 auto; overflow: hidden;">
+          <iframe src="docs/PIS.pdf#view=FitH" style="width: 100%; height: 90%; border: none;"></iframe>
+          </div>
+          </div>
+          `;
+        },
+        choices: [`Click here to confirm consent and continue. Or close this browser window to end the study.`],
+        button_html: '<button class="standard-button">%choice%</button>',
+        
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `PISdoc`;
+          data.task= 'PIS';
+        }
+
+      },
+      Debriefdoc: {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function () {
+          return `            
+            <div style="display: flex; flex-direction: column; align-items: center; width: 100%; padding: 0;">
+                <div style="width: 100vh; height: 80vh; border: 1px solid #ccc; background-color: white; margin: 40 auto; overflow: hidden;">
+                    <iframe src="docs/debrief.pdf#view=FitH" style="width: 100%; height: 90%; border: none;"></iframe>
+                </div>                        
+            </div>
+          `;
+        },
+        choices: [`Click here to end the experiment and receive course credit.`],
+        button_html: '<button class="standard-button">%choice%</button>',
+        
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `debrief`;
+          data.task= 'debrief' ;
+        }
+
+      },
+      pracInstructions: {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `<div style= "font-size: ${24 * pixelsPerUnit / 150}px; color: white; 
+        position: absolute;
+         top: 50%;left: 50%; transform: translate(-50%, -50%)">        
+
+            <br>Welcome to the experiment.<br> 
+            Please read the instructions carefully.<br>
+            There are two task types.<br><br>
+            In the visual search task:<br>
+            You must search the screen for either a red <font color = "red">"T" </font>
+            or blue <font color = "blue"> "O" </font> hidden among red <font color = "red"> "X"s </font>.
             <br><br> In the digit task:<br> You must recall a list of numbers in reverse order. </div>
         `,
         choices: ["Let's practice!"],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
+        button_html:  '<button class="standard-button">%choice%</button>',
       },
-      practice: {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: `
-        <div style="
-          font-size: 24px; 
-          font-weight: bold;
-          text-align: centre;
-          line-height: 2.2;"
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh; 
-          flex-direction: column;
-          ">          
-          <br><br>Practice Session</h2>
-          <p>Let's practice each task before starting the main experiment.</p>
-          <p>You'll try multiple practice trials of each task.</p> </div>
-        `,
-        choices: ["Start Pracitce"],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
+      expInstructions: {
+        timeline: [
+          {
+            type: jsPsychHtmlButtonResponse,
+            stimulus: function () {
+              const slideNumber = jsPsych.timelineVariable('slideNum');
+              return `
+                        <div class = "experiment-images">                      
+                    <img src="instruction-images/expInstructions/Slide${slideNumber}.jpeg" 
+                    alt="Experiment Instructions" > 
+                    </div>`;
+            },
+            choices: ["Continue"],
+            button_html: '<button class="standard-button">%choice%</button>',
+            
+            on_finish: function (data) {
+              //replace stim with simple placeholder
+              data.stimulus = `expInstruc`;
+              data.task = `expIntructions`;
+
+            }
+          }
+        ],
+        timeline_variables: [
+          { slideNum: 1 },
+          { slideNum: 2 },
+          { slideNum: 3 },
+          { slideNum: 4 },
+          { slideNum: 5 },
+          { slideNum: 6 },
+          { slideNum: 7 }
+        ]
       },
 
+      startMain: {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `<div class="experiment-text" style= "font-size: ${24 * pixelsPerUnit / 150}px;">
+          You are now ready to start the main experiment </div>`,
+        choices: ['Continue'],
+        button_html:  '<button class="standard-button">%choice%</button>',
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `startMain`;
+          data.task = `startMain`;
+        } 
+      },
       getReady: {
         type: jsPsychHtmlButtonResponse,
-        stimulus: '<br><br>Get ready for the next trial!',
+        stimulus: `<div class="experiment-text" style= "font-size: ${24 * pixelsPerUnit / 150}px;">
+          Get ready for the next trial </div>`,
         choices: ['Continue'],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
+        button_html:  '<button class="standard-button">%choice%</button>',
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `getReady`;
+          data.task = `getReady`;
+        } 
       },
 
       VisSearchInstructions: {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
-          <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
-            <br><br> On the next screen, you must search for either a red</span> 
+          <div style = "font-size: ${24 * pixelsPerUnit / 150}px; color: white; 
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);">
+           On the next screen, you must search for either a red</span> 
             <span style="color: red;">"T"</span> or blue <span style="color: blue;">"O"</span><br>
-            <span style="color: black;"> hidden among red <span style="color: red;">"X"</span></span>s.            
-          <br><br><br><br></div>
+             hidden among red <span style="color: red;">"X"</span>s. </div>
         `,
         choices: ['Ready'],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);">%choice%</button>',
+        button_html:  '<button class="standard-button">%choice%</button>',
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `VS_instruct`;
+          data.task = `VS_instruct`;
+        } 
       },
 
       DSBinstructions: {
         type: jsPsychHtmlButtonResponse,
-        stimulus: `
-          <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
+        stimulus: `<div style= "font-size: ${24 * pixelsPerUnit / 150}px; color: white; 
+        position: absolute;
+         top: 50%;left: 50%; transform: translate(-50%, -50%)"> 
             <br><br>On the next screen, you will be shown a sequence of numbers.<br><br>
             <br><br>
             Your task is to remember the numbers in reverse order.<br>
@@ -210,42 +383,31 @@
           </div>
         `,
         choices: ['Ready'],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);">%choice%</button>',
+        button_html:  '<button class="standard-button">%choice%</button>',
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `DSB_instruct`;
+          data.task = `DSB_instruct`;
+        } 
       },
       imageInstructions: {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
-          <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
+          <div class="experiment-text" style= "font-size: ${24 * pixelsPerUnit / 150}px;">
             <br><br>On the next screen, you will be shown an image of nature.<br><br>
             Please view this image, the experiment will resume shortly.
           </div>
         `,
         choices: ['Ready'],
-        button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
-      },
-
-
-      exit: {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: '<br><br>Thank you for your participation. Your data has been saved.',
-        choices: ['Exit'],
+        button_html:  '<button class="standard-button">%choice%</button>',
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `image_instruct`;
+          data.task = `image_instruct`;
+        } 
       },
 
     };
-
-    // function interBlockmsg(trial, block) {
-    //   return {
-    //     type: jsPsychHtmlButtonResponse,
-    //     stimulus: `
-    //     <div style="font-size: 24px; font-weight: bold; text-align: center; line-height: 1.6;">
-    //     <br><br> Click to begin trial ${trial+1} of ${experimentParams.nTrials}, <br>
-    //     <br> Block  ${block+1} of ${experimentParams.nBlocks}, <br>
-    //     </div>
-    //     `,
-    //     choices: ['Ready'], // 
-    //     button_html: '<button style="font-size: 20px; padding: 15px 30px; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%);">%choice%</button>',
-    //   }
-    // }
 
 
     const feedbackTrial = {
@@ -257,7 +419,110 @@
           : "<p style='color:red;'>Incorrect.</p><p>Try to recall in the reversed order.</p>";
       },
       choices: ['Continue'],
+      on_finish: function (data) {
+          //replace stim with simple placeholder          
+          data.task = `feedback`;
+        } 
     };
+
+    // survey variable 
+    
+    const PRSpreamble={
+      type: jsPsychHtmlButtonResponse,
+      stimulus: ` <div class = "experiment-text"; style= "font-size: ${24 * pixelsPerUnit / 150}px;">
+      We are intereted in how you experience this environment. <br>
+      To help us understand your experience, we have provbided the following statements for you to respond to.<br> 
+      Please read carefully, then ask yourself: 
+      "how much does this statement apply to my experience here?". <br>
+      To indicate your answer choose one number from the rating scale beside the statement.
+      So, for example, if you think the statement does not apply to you at all, choose "0" (not at all).
+      If you think it applies rather much, then select "6" rather much. If you think that it applies very much, you would select "10" (very much).
+      0 -1- 2- 3- 4- 5- 6</div>`,
+      choices: ['Continue'],
+      button_html: '<button class="standard-button">%choice%</button>',
+      on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `PRS_preamble`;
+          data.task = `PRS_preamble`;
+        } 
+    };
+
+    //this function creates the labels used below
+    function createLabelSet() {
+        const labels = [];
+
+        // Add the "0(not at all)" label
+        labels.push("<div style='color:white; text-align:center;'>0<br>(not at all)</div>");
+
+        // Add labels 1-4
+        for (let i = 1; i <= 4; i++) {
+          labels.push(`<div style='color:white; text-align:center;'>${i}</div>`);
+        }
+
+        // Add the "5(moderate agreement)" label
+        labels.push("<div style='color:white; text-align:center;'>5<br>(moderate agreement)</div>");
+
+        // Add labels 6-9
+        for (let i = 6; i <= 9; i++) {
+          labels.push(`<div style='color:white; text-align:center;'>${i}</div>`);
+        }
+
+        // Add the "10(complete agreement)" label
+        labels.push("<div style='color:white; text-align:center;'>10<br>(complete agreement)</div>");
+
+        return labels;
+      }
+    
+    function createPRS11(imgNumber) {
+      return {
+        type: jsPsychSurveyLikert,
+        preamble: `<div style="text-align: center; margin-bottom: 30px;">
+          <img src="images/photo_${imgNumber}.jpg" style="max-width: 80%; max-height: 50vh; border-radius: 10px; box-shadow: 0 0 10px rgba(255,255,255,0.2);">
+          <div style="color: white; font-size: ${24 * pixelsPerUnit / 150}px;">
+          <p>Please rate how much each statement applies to your experience of this image:</p>
+          </div>
+          </div>`,
+        questions: [
+          { prompt: "Places like that are fascinating", name: 'FA_12', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "In places like this my attention is drawn to many interesting things", name: 'FA_7', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "In places like this it is hard to be bored", name: 'FA_11', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "Places like this are a refuge from nuisances", name: 'BA_1', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "To get away from things that usually demand my attention I like to go to places like this", name: 'BA_5', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "To stop thinking about the things that I must get done I like to go to places like this", name: 'BA_4', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "There is a clear order in the physical arrangement of places like this", name: 'COH_15rev', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "In places like this it is easier to see how things are organised", name: 'COH_26', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "In places like this everything seems to have its proper place", name: 'newitem', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "That place is large enough to allow exploration in many directions", name: 'FA_10', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+          { prompt: "In places like that there are few boundaries to limit my possibility for moving about", name: 'X', labels: ["0<br>(not at all)", "1", "2", "3", "4", "5<br>(moderate agreement)", "6", "7", "8", "9", "10<br>(complete agreement)"] },
+        ],
+        randomize_question_order: false,
+        scale_width: 500,
+        button_label: 'Continue',
+        data: {
+          task: 'PRS-11'          
+        },
+        // Add custom styling for white text
+        on_load: function () {
+          // Make all text elements white for dark background
+          document.querySelectorAll('.jspsych-survey-likert-statement').forEach(element => {
+            element.style.color = 'white';
+          });
+          // Add CSS to make the survey labels white and centered
+          const styleElement = document.createElement('style');
+          styleElement.textContent = `
+          .jspsych-survey-likert-opt-label {
+            color: white !important;
+            text-align: center !important;
+          }
+        `;
+          document.head.appendChild(styleElement);
+        },
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `PRS11`;          
+        } 
+      };
+    }
 
 
     // Preload images
@@ -287,6 +552,8 @@
         on_finish: function (data) {
           data.is_attention_check = true;
           data.attention_check_correct = data.response === 1;
+          data.stimulus = 'attncheck';
+          data.task = 'attncheck'
         }
       };
     }
@@ -307,18 +574,19 @@
         on_load: () => {
           console.log("Static scene loaded.");
         },
+        on_finish: function (data) {
+          data.stimulus = `img${imgID}`;        
+          data.task = `img${imgID}`;
+        }
+        
       }
     }
 
-
-    //function to divide the search space into a grid and randomly select grid cells to place targets and distractors: 
-    function generateGridPositions(n, containerWidth, containerHeight, radiusPercentage, containerPaddingPercentage) {
+    function generateGridPositions(n, containerWidth, containerHeight, containerPaddingPercentage) {
       const positions = [];
 
-      // Convert radius and padding to pixel values
-      const radius = Math.min(containerWidth, containerHeight) * (radiusPercentage / 100);
+      // Calculate padding in pixels
       const padding = Math.min(containerWidth, containerHeight) * (containerPaddingPercentage / 100);
-
       // Define grid size
       const gridSize = Math.ceil(Math.sqrt(n)); // Number of rows and columns in the grid
       const cellWidth = (containerWidth - 2 * padding) / gridSize;
@@ -341,13 +609,14 @@
       // Select the first `n` grid cells
       for (let i = 0; i < n; i++) {
         const cell = gridCells[i];
-        // calc centre of cells:
+
+        // Calculate center of cells
         const x = padding + (cell.col + 0.5) * cellWidth; // Center of the cell
         const y = padding + (cell.row + 0.5) * cellHeight; // Center of the cell
 
-        // add jitter (small offsets):
-        const jitterX = (Math.random() - 0.5) * cellWidth * .8; // +-50% of cell
-        const jitterY = (Math.random() - 0.5) * cellHeight * .8; // +-25% of cell
+        // Add jitter (small offsets)
+        const jitterX = (Math.random() - 0.5) * cellWidth * 0.8; // ±40% of cell
+        const jitterY = (Math.random() - 0.5) * cellHeight * 0.8; // ±40% of cell
 
         // Convert to percentages
         const xPercent = ((x + jitterX) / containerWidth) * 100;
@@ -359,23 +628,20 @@
       return positions;
     }
 
-    let pixelsPerUnit = 1; // Default until calibrated
-
 function createVisualSearchTrial(searchDifficulty) {
-    const itemSize = 40 * pixelsPerUnit; // Adjust 20 to desired physical size
-
+    const itemSize = pixelsPerUnit* 0.5; // Adjusts to relevant size
+    // debugger;
     return {
       type: jsPsychHtmlButtonResponse,
       stimulus: () => {
         const positions = generateGridPositions(
           experimentParams.nTargs + 1,
-          window.innerWidth * 0.8,
-          window.innerHeight * 0.8,
-          experimentParams.radiusPercentage,
+          window.innerWidth*0.8 ,
+          window.innerHeight*0.8,          
           experimentParams.containerPaddingPercentage
         );
-
-        let stimulusHTML = `<div style="width: 80vw; height: 80vh; background-color: #f0f0f0; position: relative; margin: auto; border-radius: 10px;">`;
+        debugLog( "generatedpositions:", positions )
+        let stimulusHTML = `<div style="width: 90vw; height: 90vh; background-color: #f0f0f0; position: relative; margin: auto; border-radius: 10px;">`;
 
         for (let i = 0; i < experimentParams.nTargs; i++) {
           const pos = positions[i];
@@ -434,10 +700,11 @@ function createVisualSearchTrial(searchDifficulty) {
           jsPsych.finishTrial({ rt: performance.now() - startTime, correct: true });
         });
       },
-      on_finish: (data) => {
-        data.trial_type = 'visual_search';
+      on_finish: (data) => {        
         data.search_difficulty = searchDifficulty;
         data.enhanced = true;
+        data.stimulus='VisSearch';
+        data.task='VisSearch';
 
         if (!data.rt) {
           console.log('Timeout: No response.');
@@ -450,10 +717,9 @@ function createVisualSearchTrial(searchDifficulty) {
     };
   }//end function
 
-
-
     // Modified digitSpanBackwardTask with dynamic length
     function createDigitSpanTask(currentSpan) {
+      let digitsforCurrentTrial=[];
       return {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: '',
@@ -470,17 +736,12 @@ function createVisualSearchTrial(searchDifficulty) {
           document.body.appendChild(stimulusDiv);
 
           // Generate random sequence of digits
-          const digits = [];
+          digitsforCurrentTrial=[];
           for (let i = 0; i < currentSpan; i++) {
-            digits.push(Math.floor(Math.random() * 10));
+            digitsforCurrentTrial.push(Math.floor(Math.random() * 10));
           }
-
-          // Store the digits for later comparison
-          jsPsych.data.addProperties({
-            originalDigits: digits,
-            currentSpanLength: currentSpan
-          });
-          console.log('current digits:', digits);
+          
+          console.log('current digits:', digitsforCurrentTrial);
 
           let currentDigitIndex = 0;
           let timeoutId; // store the timeoutID for cleanup
@@ -488,14 +749,17 @@ function createVisualSearchTrial(searchDifficulty) {
           const showNextDigit = () => {
             stimulusDiv.innerHTML = '-';
             timeoutID = setTimeout(() => {
-              if (currentDigitIndex < digits.length) {
-                stimulusDiv.innerHTML = digits[currentDigitIndex];
+              if (currentDigitIndex < digitsforCurrentTrial.length) {
+                stimulusDiv.innerHTML = digitsforCurrentTrial[currentDigitIndex];
                 currentDigitIndex++;
                 timeoutID = setTimeout(showNextDigit, experimentParams.digitDuration); //schedule next digit
               } else {
                 stimulusDiv.innerHTML = '';
                 cleanup(); //cleanup and finish trial
-                jsPsych.finishTrial();
+                jsPsych.finishTrial({
+                  originalDigits: digitsforCurrentTrial,
+                  currentSpanLength: currentSpan,
+                });
               }
             }, 100);
           };
@@ -514,10 +778,18 @@ function createVisualSearchTrial(searchDifficulty) {
         },
         choices: [],
         on_finish: (data) => {
-          const digits = jsPsych.data.get().last(1).values()[0].originalDigits;
-          data.reversedDigits = digits.reverse().join('');
-          jsPsych.data.addProperties({ reversedDigits: data.reversedDigits });
-
+          if (data.originalDigits){
+            // Create a copy of the array before reversing (to avoid mutating the original)
+            const reversedDigits = [...data.originalDigits].reverse().join('');
+            data.reversedDigits = reversedDigits;
+            data.stimulus = `DSB`;
+            data.task = `DSB ${data.originalDigits.join('')}`;
+          } else {
+            console.error('Original digits not found in trial data');
+            data.reversedDigits = '';
+            data.stimulus = `DSB error`;
+            data.task = `DSB error`;
+          }
         },
 
       };
@@ -539,15 +811,15 @@ function createVisualSearchTrial(searchDifficulty) {
         </div>`,
         choices: '',
         prompt: '<p>Click the numbers in the correct order.</p>',
+        data: {
+          task: 'DSBrecall'          
+        },
         on_load: () => {
           const lastTrial = jsPsych.data.get().last(1).values()[0];
           const reversedDigits = lastTrial.reversedDigits;
           const currentSpan = lastTrial.currentSpanLength;
 
-          jsPsych.data.addProperties({
-            correctAnswer: reversedDigits,
-            currentSpan: currentSpan
-          });
+          
 
           const userResponse = [];
           let clickedCount = 0;
@@ -567,159 +839,252 @@ function createVisualSearchTrial(searchDifficulty) {
                 const userAnswer = userResponse.join('');
                 const isCorrect = userAnswer === reversedDigits;
 
-                // Store result and update span length for next trial
-                jsPsych.data.addProperties({
+                // also count individual digit matches: 
+                let correctDigits = 0;
+                const expectedDigits = reversedDigits.split('');
+
+                // Count correct digits in the right positions
+                for (let i = 0; i < userResponse.length; i++) {
+                  if (userResponse[i] === expectedDigits[i]) {
+                    correctDigits++;
+                  }
+                }
+                jsPsych.finishTrial({
                   is_correct: isCorrect,
                   response: userAnswer,
-                  span_length: currentSpan
+                  span_length: currentSpan,
+                  correct_digits: correctDigits,
+                  digit_accuracy: correctDigits/currentSpan,
+
                 });
-
-                // Update the global span length based on performance
-                if (isCorrect && currentSpan < experimentParams.maxDigitSpan) {
-                  jsPsych.data.addProperties({ next_span: currentSpan + 1 });
-                }
-
-                jsPsych.finishTrial();
               }
             });
           });
+        },
+        on_finish: function (data){
+          data.stimulus= 'DSBrecall';
+          
         }
       };
     }
 
+    const customCalibration = {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function () {
+          return `<div style= "font-size: ${24 * pixelsPerUnit / 150}px; color: white">              
+                  <p>First, Please hold a credit card up to your screen.</p>
+                  <p>Adjust this box until it matches the size of the credit card.</p>
+                  <div id="calibration-box" style="
+                      width: 506px;
+                      height: 319px;
+                      border: 2px solid white;
+                      background-color: rgba(255,255,255,0.2);
+                      margin: 20px auto;
+                      resize: both;
+                      overflow: hidden;
+                  "></div>
+              </div>
+          `;
+        },
+        choices: ["Continue"],
+        on_load: function () {
+          console.log("Custom calibration loaded");
+          // Store reference to the box in window scope
+          window.calibrationBox = document.getElementById('calibration-box');
+          // Add event listener to the button to capture dimensions right before click
+          setTimeout(function () {
+            const button = document.querySelector('button.jspsych-btn');
+            if (button) {
+              button.addEventListener('click', function () {
+                if (window.calibrationBox) {
+                  window.boxWidth = window.calibrationBox.offsetWidth;
+                  console.log("Box width captured before click:", window.boxWidth);
+                } else {
+                  console.error("Box element not found at button click");
+                }
+              });
+            }
+          }, 100);
+        },
 
-    var inputs = {
-      type: jsPsychResize,
-      item_width: 3 + 3/8,
-      item_height: 2 + 1/8,
-      prompt: "<p>Click and drag the lower right corner of the box until the box is the same size as a credit card held up to the screen.</p>",
-      pixels_per_unit: 150,
-      on_finish: (data) => {
-      pixelsPerUnit = data.pixels_per_unit; // Save the calibration
-      } 
-    };
-  
-    // Practice trials generator
-    function generatePracticeTrials() {
-      const practiceTrials = [];
-
-      // Add practice instructions
-      practiceTrials.push(messages.practice);
-      practiceTrials.push(inputs);
-      //add instructions for the visual search task. 
-      practiceTrials.push(messages.VisSearchInstructions);
-
-      // Generate practice trials for each task type
-
-      for (let i = 0; i < experimentParams.nPracticeTrials; i++) {
-        // Practice visual search
-        // practiceTrials.push(messages.practiceTrials);
-
-        practiceTrials.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
-        practiceTrials.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
-        practiceTrials.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
-        practiceTrials.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
-
-
-        // add instructions for the DSB task
-        practiceTrials.push(messages.DSBinstructions);
-        //DSB (*)min to max span)
-        for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
-          practiceTrials.push(messages.DSBinstructions);
-          practiceTrials.push(createDigitSpanTask(iSpan));
-          practiceTrials.push(createRecallTask());
-          practiceTrials.push(feedbackTrial);
+        on_finish: function (data) {
+          debugLog("on finish calibration running");
+          // Use the width captured by the button click
+          if (window.boxWidth) {
+            pixelsPerUnit = Math.round(window.boxWidth / 3.375);
+            console.log("Calibration complete, pixels per unit:", pixelsPerUnit);
+            data.pixels_per_unit = pixelsPerUnit;
+          } else {
+            console.error("Box width not captured");
+            data.pixels_per_unit = 150; // Default
+          }
+          data.stimulus='calibration';
+          data.task='calibration';
         }
-
-      }
-        // Add practice completion message
-        practiceTrials.push({
-          type: jsPsychHtmlButtonResponse,
-          stimulus: `
-          <div style="text-align: center;">
-            <h2><br><br>Practice Complete!</h2>
-            <p>You're now ready to begin the main experiment.</p>
-          </div>
-        `,
-          choices: ['Start Main Experiment']
-        });
-        return practiceTrials;
-        
-      } // end function gen practice trials
-        
+      };
+  
+    // for help with data wrangling, create a function to consolidate data.
+      
       
     
+    function DSBsummarycalc(experimentParams, PreorPost) {
+        // Filter recent recall data
+        let recallData = jsPsych.data.get()
+          .filter({ task: 'DSBrecall' })
+          .last(experimentParams.maxDigitSpan - experimentParams.minDigitSpan);
 
+        // Calculate overall performance
+        let correctCount = recallData.filter({ is_correct: true }).count();
+        let totalCount = recallData.count();
+        let propCorrect = correctCount / totalCount;
 
-    // // Progress bar updater
-    // function updateProgressBar(totalTrials, completedTrials) {
-    //   const progress = (completedTrials / totalTrials) * 100;
-    //   document.querySelector('.progress-bar').style.width = `${progress}%`;
-    // }
+        // Get all trials as array for easier processing
+        const trials = recallData.values();
 
-    // Function to calculate the total number of trials in the timeline
-    // function calculateTotalTrials(timeline) {
-    //   let totalTrials = 0;
+        // Find max span correct
+        let maxCorrectSpan = 0;
+        for (let i = 0; i < trials.length; i++) {
+          if (trials[i].is_correct && trials[i].span_length > maxCorrectSpan) {
+            maxCorrectSpan = trials[i].span_length;
+          }
+        }
 
-    //   totalTrials = experimentParams.nBlocks*experimentParams.nTrials; 
-    //   // timeline.forEach(trial => {
-    //   //   if (trial.timeline) {
-    //   //     // If the trial is a timeline (e.g., a block), recursively count its trials
-    //   //     totalTrials += calculateTotalTrials(trial.timeline);
-    //   //   } else {
-    //   //     // If the trial is a single trial, count it
-    //   //     totalTrials++;
-    //   //   }
-    //   // });
-    //   return totalTrials;
-    // }
+        // Calculate digit-level accuracy
+        let totalDigits = 0;
+        let totalCorrectDigits = 0;
 
-    // // Initialize the progress bar
-    // function initializeProgressBar(timeline) {
-    //   const totalTrials = calculateTotalTrials(timeline);
-    //   let completedTrials = 0;
-    //   // Update the progress bar on each trial start
-    //   jsPsych.pluginAPI.registerCallback('on_trial_start', () => {
-    //     const progress = jsPsych.getProgress();
-    //     const percentComplete = (progress.current_trial_global / progress.total_trials) * 100;
-    //     document.getElementById('progress-bar').style.width = percentComplete + '%';
-    //     updateProgressBar(totalTrials, completedTrials);
-    //   });
+        // Sum up the values from all trials
+        for (let i = 0; i < trials.length; i++) {
+          totalDigits += trials[i].span_length;
+          totalCorrectDigits += trials[i].correct_digits;
+        }
 
-    //   // Reset the progress bar at the start of the experiment
-    //   updateProgressBar(totalTrials, 0);
-    // }
+        // Calculate the proportion
+        const digitAccuracy = totalDigits > 0 ? totalCorrectDigits / totalDigits : 0;
 
-    // Enhanced timeline generator (with counterbalancing?)
-    function generateEnhancedTimeline(experimentParams) {
+        // Update dynamic fields based on PreorPost value
+        if (PreorPost === 1) { // Pre-test
+          experimentParams.dyn_DSBpre_propcorrect = propCorrect;
+          experimentParams.dyn_DSBpre_maxspan = maxCorrectSpan;
+          experimentParams.dyn_DSBpre_digitaccuracy = digitAccuracy;
+        } else if (PreorPost === 2) { // Post-test
+          experimentParams.dyn_DSBpost_propcorrect = propCorrect;
+          experimentParams.dyn_DSBpost_maxspan = maxCorrectSpan;
+          experimentParams.dyn_DSBpost_digitaccuracy = digitAccuracy;
+        }
+
+          // Log summary for debugging
+          console.log(`DSB ${PreorPost === 1 ? 'Pre' : 'Post'} Performance: 
+        - Proportion correct: ${(propCorrect * 100).toFixed(1)}% (${correctCount}/${totalCount})
+        - Max correct span: ${maxCorrectSpan}
+        - Digit accuracy: ${(digitAccuracy * 100).toFixed(1)}%`);
+
+        // Return updated experimentParams
+        return experimentParams;
+      }
+
+      function consolidateTrialData(experimentParams) {
+          return {
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: '',
+            choices: "NO_KEYS",
+            trial_duration: 0,
+            data: {
+              // Pre-populate all values
+              block: experimentParams.dyn_block,
+              trial: experimentParams.dyn_trial,
+              trialidx: experimentParams.dyn_trialidx,
+              VisDifficulty: experimentParams.dyn_VSD,
+              Vis_meanRT: experimentParams.dyn_VS_meanRT,
+              Vis_propCorr: experimentParams.dyn_VS_propcorrect,
+              DSBpre_propcorrect: experimentParams.dyn_DSBpre_propcorrect,
+              DSBpre_maxspan: experimentParams.dyn_DSBpre_maxspan,
+              DSBpre_digitaccuracy: experimentParams.dyn_DSBpre_digitaccuracy,
+              DSBpost_propcorrect: experimentParams.dyn_DSBpost_propcorrect,
+              DSBpost_maxspan: experimentParams.dyn_DSBpost_maxspan,
+              DSBpost_digitaccuracy: experimentParams.dyn_DSBpost_digitaccuracy,
+              imageIDX: experimentParams.dyn_imageID,              
+              trial_type: "consolidated-trial-data"
+            }
+          };
+        }
+      /////////////// CREATE THE TIMELINE
+      // Enhanced timeline generator (with counterbalancing?)
+
+    
       const timeline = [];
 
 
       // Add preload
       timeline.push(preloadImages);
 
-      timeline.push(messages.PIS);
+      timeline.push(messages.Welcome);
+      timeline.push(messages.PISdoc);  
+        
+      //prac Instructions
+      timeline.push(messages.pracInstructions);
+      timeline.push(customCalibration);
+
       
-      //welcome Msg
-      timeline.push(messages.welcome);
+
+      //add instructions for the visual search task. 
+      timeline.push(messages.VisSearchInstructions);
+
+      // practice trials have a unique structure (no images):
+      // we ree[eat the vis search task, and sweep through the DSB lengths]
+      
+      // for (let i = 0; i < experimentParams.nPracticeTrials; i++) {
+      //   // Practice visual search
+      //   timeline.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
+      //   timeline.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
+      //   // timeline.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
+      //   // timeline.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
 
 
-      // Add practice trials
-      timeline.push(...generatePracticeTrials());
-
-      // Generate main experiment trials
-      let currentSpan = experimentParams.minDigitSpan;
-
+      //   // add instructions for the DSB task
+      //   timeline.push(messages.DSBinstructions);
+      //   //DSB (*)min to max span)
+      //   for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
+      //     timeline.push(messages.DSBinstructions);
+      //     timeline.push(createDigitSpanTask(iSpan));
+      //     timeline.push(createRecallTask());
+      //     timeline.push(feedbackTrial);
+      //   }
+      // } 
+      // now include end of practice msg
+      // timeline.push(messages.expInstructions);
+      
+      // populate main experimental trials.
+      
+      let trialidx=-1; // counter
+      
       for (let block = 0; block < experimentParams.nBlocks; block++) {
         for (let trial = 0; trial < experimentParams.nTrials; trial++) {
+          
+          trialidx=trialidx+1;
+          
           // for each trial sequence (ntrials per block)
 
           // Randomly add attention check
           if (Math.random() < experimentParams.attentionCheckFrequency) {
             timeline.push(createAttentionCheck());
           }
-          // // push message showing progress:        
-          // timeline.push(interBlockmsg(trial, block));
+          // // push message showing progress:   
+          const trialStart = {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: `<div class="experiment-text" style= "font-size: ${48 * pixelsPerUnit / 150}px;">
+                    <p> Get ready to start Trial 1 of ${experimentParams.nTrials}, <br> <br>
+                        Block : ${block + 1} of ${experimentParams.nBlocks} </p>`,
+                choices: ['Start'],
+                button_html: '<button style="font-size: 20px; padding: 15px 30px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">%choice%</button>',
+                on_finish: function (data) {
+                    //replace stim with simple placeholder
+                    data.stimulus = `block message`;
+                }
+            };
+
+            // push block message.
+            timeline.push(trialStart);
 
           // add trial sequence. 
           // order is currently fixed too:
@@ -734,16 +1099,22 @@ function createVisualSearchTrial(searchDifficulty) {
 
           // show nRepeats of fixed difficulty.
           let currentDifficulty = Math.random() < 0.5 ? 1 : 2; // 1 of 2 difficulties.)
+          
+          
+          //push to timeline.
           for (let irep = 0; irep < experimentParams.nRepeats; irep++) {
             timeline.push(createVisualSearchTrial(currentDifficulty)); // 1 of 2 difficulties.)
           }
-          //DSB
-          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
-            timeline.push(messages.DSBinstructions);
+
+          //DSB (pre) sequence:
+          timeline.push(messages.DSBinstructions);
+
+          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {            
             timeline.push(createDigitSpanTask(iSpan));
             timeline.push(createRecallTask());
           }
-
+          //get data for these last few trials:
+          experimentParams= DSBsummarycalc(experimentParams,1); //returns experimentParams with new values.
 
           // show image.
           let im2show = Math.floor(Math.random() * experimentParams.nImages) + 1;
@@ -752,65 +1123,27 @@ function createVisualSearchTrial(searchDifficulty) {
 
 
           //DSB (post)
-          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
-            timeline.push(messages.DSBinstructions);
+          timeline.push(messages.DSBinstructions);
+          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {            
             timeline.push(createDigitSpanTask(iSpan));
             timeline.push(createRecallTask());
           }
-          // Add metadata
-          // trialSequence.forEach(trial => {
-          //   trial.data = {
-          //     ...trial.data,
-          //     block,
-          //     trial,
-          //     condition: condition.name,
-          //     participantId
-          //   };
-          // });
-
-          // timeline.push(...trialSequence);
+          //get data for these last few trials:
+          experimentParams=DSBsummarycalc(experimentParams,2); //returns experimentParams with new values.
+          
+          
+          timeline.push(consolidateTrialData(experimentParams));        
+          
         }
 
-        // Add block break
-        if (block < experimentParams.nBlocks - 1) {
-          timeline.push({
-            type: jsPsychHtmlButtonResponse,
-            stimulus: `
-              <div style="text-align: center;">
-                <h2>Block ${block + 1} Complete!</h2>
-                <p>Current digit span: ${currentSpan}</p>
-                <p>Take a short break if needed.</p>
-              </div>
-            `,
-            choices: ['Continue']
-          });
-        }
-      }
+      } // for block
 
-      timeline.push(messages.exit);
-      return timeline;
-    } // end function (gen timeline)
-    //// 
-    // Run the enhanced experiment
-
-    const timeline = generateEnhancedTimeline(experimentParams);
-
-    //verify timeline (debugging)
-      
-    function verifyTimeline(timeline) {
-    timeline.forEach((trial, index) => {
-      if (!trial.type) {
-        console.error(`Invalid trial at index ${index}:`, trial);
-      }
-      if (typeof trial.stimulus !== 'function' && typeof trial.stimulus !== 'string') {
-        console.warn(`Potential issue with stimulus in trial at index ${index}:`, trial);
-      }
-      if (trial.choices && !Array.isArray(trial.choices)) {
-        console.warn(`'choices' should be an array in trial at index ${index}:`, trial);
-      }
-    });
-    console.log('Timeline verification complete.');
-}
+    // collect ratings of restorativeness per image:
+    timeline.push(PRSpreamble);
+      for (let imgn = 1; imgn < 4; imgn++) {
+        timeline.push(createPRS11(imgn));
+      }      
+    timeline.push(messages.Debriefdoc); 
     jsPsych.run(timeline);//
 
     // jsPsych.run(generateDSBTrials(3,8));
