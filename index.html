@@ -925,8 +925,6 @@ function createVisualSearchTrial(searchDifficulty) {
   
     // for help with data wrangling, create a function to consolidate data.
       
-      
-    
     function DSBsummarycalc(experimentParams, PreorPost) {
         // Filter recent recall data
         let recallData = jsPsych.data.get()
@@ -982,6 +980,36 @@ function createVisualSearchTrial(searchDifficulty) {
         // Return updated experimentParams
         return experimentParams;
       }
+      // the above function needs to be within a timeline variable to collect data during runtime.
+        function addDSBCalculationToTimeline(timeline, experimentParams, preOrPost) {
+          timeline.push({
+            type: jsPsychHtmlKeyboardResponse,
+            stimulus: '',
+            choices: "NO_KEYS",
+            trial_duration: 0,
+            on_finish: function (data) {
+              experimentParams = DSBsummarycalc(experimentParams, preOrPost);
+
+              // Store the values in the data
+              if (preOrPost === 1) {
+                data.DSBpre_propcorrect = experimentParams.dyn_DSBpre_propcorrect;
+                data.DSBpre_maxspan = experimentParams.dyn_DSBpre_maxspan;
+                data.DSBpre_digitaccuracy = experimentParams.dyn_DSBpre_digitaccuracy;
+              } else {
+                data.DSBpost_propcorrect = experimentParams.dyn_DSBpost_propcorrect;
+                data.DSBpost_maxspan = experimentParams.dyn_DSBpost_maxspan;
+                data.DSBpost_digitaccuracy = experimentParams.dyn_DSBpost_digitaccuracy;
+              }
+              data.trial_type = "dsb-summary-calculation";
+            }
+          });
+        }
+
+// Usage:
+// addDSBCalculationToTimeline(timeline, experimentParams, 1); // For pre-test
+// ... other trials ...
+// addDSBCalculationToTimeline(timeline, experimentParams, 2); // For post-test
+
 
       function consolidateTrialData(experimentParams) {
           return {
@@ -1113,9 +1141,9 @@ function createVisualSearchTrial(searchDifficulty) {
             timeline.push(createDigitSpanTask(iSpan));
             timeline.push(createRecallTask());
           }
-          //get data for these last few trials:
-          experimentParams= DSBsummarycalc(experimentParams,1); //returns experimentParams with new values.
-
+          addDSBCalculationToTimeline(timeline, experimentParams, 1); // For pre-test
+          
+          
           // show image.
           let im2show = Math.floor(Math.random() * experimentParams.nImages) + 1;
           timeline.push(messages.imageInstructions);
@@ -1129,8 +1157,7 @@ function createVisualSearchTrial(searchDifficulty) {
             timeline.push(createRecallTask());
           }
           //get data for these last few trials:
-          experimentParams=DSBsummarycalc(experimentParams,2); //returns experimentParams with new values.
-          
+          addDSBCalculationToTimeline(timeline, experimentParams, 2); // For post-test
           
           timeline.push(consolidateTrialData(experimentParams));        
           
