@@ -173,9 +173,9 @@
     // Set static and global experiment parameters
     let experimentParams = {
       // Block structure
-      nBlocks: 1,
-      nTrials: 1,
-      nPracticeTrials: 1, // this n is per type (there are 4 reps of DSB and vis Search within each)
+      nBlocks: 2,
+      nTrials: 2,
+      nPracticeTrials: 2, // this n is reps of both types -same as exp, absent the images.
 
       // Visual search parameters
       searchDifficulty: 1, //[1 or 2], easy or hard, updated dynamically below.      
@@ -430,14 +430,14 @@
     const PRSpreamble={
       type: jsPsychHtmlButtonResponse,
       stimulus: ` <div class = "experiment-text"; style= "font-size: ${24 * pixelsPerUnit / 150}px;">
-      We are intereted in how you experience this environment. <br>
-      To help us understand your experience, we have provbided the following statements for you to respond to.<br> 
+      We are intereted in how you experienced this environment. <br>
+      To help us understand your experience, we have provided the following statements for you to respond to.<br> 
       Please read carefully, then ask yourself: 
       "how much does this statement apply to my experience here?". <br>
-      To indicate your answer choose one number from the rating scale beside the statement.
+      To indicate your answer choose one number from the rating scale beside each statement.
       So, for example, if you think the statement does not apply to you at all, choose "0" (not at all).
-      If you think it applies rather much, then select "6" rather much. If you think that it applies very much, you would select "10" (very much).
-      0 -1- 2- 3- 4- 5- 6</div>`,
+      If you think it applies completely, you would select "10".
+      </div>`,
       choices: ['Continue'],
       button_html: '<button class="standard-button">%choice%</button>',
       on_finish: function (data) {
@@ -577,6 +577,7 @@
         on_finish: function (data) {
           data.stimulus = `img${imgID}`;        
           data.task = `img${imgID}`;
+          experimentParams.dyn_imageID = imgID;
         }
         
       }
@@ -690,14 +691,14 @@ function createVisualSearchTrial(searchDifficulty) {
           if (remainingTime <= 0) {
             clearInterval(progressInterval);
             document.body.removeChild(progressBar);
-            jsPsych.finishTrial({ rt: null, correct: false });
+            jsPsych.finishTrial({ rt: null, is_correct: false });
           }
         }, 50);
 
         document.getElementById('target').addEventListener('click', () => {
           clearInterval(progressInterval);
           document.body.removeChild(progressBar);
-          jsPsych.finishTrial({ rt: performance.now() - startTime, correct: true });
+          jsPsych.finishTrial({ rt: performance.now() - startTime, is_correct: true });
         });
       },
       on_finish: (data) => {        
@@ -706,9 +707,11 @@ function createVisualSearchTrial(searchDifficulty) {
         data.stimulus='VisSearch';
         data.task='VisSearch';
 
+        experimentParams.dyn_VSD = searchDifficulty;
+        
         if (!data.rt) {
           console.log('Timeout: No response.');
-        } else if (!data.correct) {
+        } else if (!data.is_correct) {
           console.log('Incorrect response.');
         } else {
           console.log('Correct response in', data.rt, 'ms.');
@@ -800,7 +803,10 @@ function createVisualSearchTrial(searchDifficulty) {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
         <p>Please recall the digits in reverse order.</p>
-        <div id="response-display" style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px;"></div>
+        <div id="response-display" style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; height: 30px;">
+        <!-- Placeholder content with invisible text -->
+        <span style="visibility: hidden;"> 0 </span>
+        </div>       
         <div id="custom-button-container" style="text-align: center; margin-top: 20px;">
           ${[...Array(10).keys()]
             .map(
@@ -819,12 +825,12 @@ function createVisualSearchTrial(searchDifficulty) {
           const reversedDigits = lastTrial.reversedDigits;
           const currentSpan = lastTrial.currentSpanLength;
 
-          
-
           const userResponse = [];
           let clickedCount = 0;
 
           const responseDisplay = document.getElementById('response-display'); // The new display
+           // Clear the placeholder content
+          responseDisplay.innerHTML = '';
           const buttons = document.querySelectorAll('.digit-button');
 
           buttons.forEach((button) => {
@@ -980,30 +986,85 @@ function createVisualSearchTrial(searchDifficulty) {
         // Return updated experimentParams
         return experimentParams;
       }
-      // the above function needs to be within a timeline variable to collect data during runtime.
-        function addDSBCalculationToTimeline(timeline, experimentParams, preOrPost) {
-          timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: '',
-            choices: "NO_KEYS",
-            trial_duration: 0,
-            on_finish: function (data) {
-              experimentParams = DSBsummarycalc(experimentParams, preOrPost);
+    // the above function needs to be within a timeline variable to collect data during runtime.
+      function addDSBCalculationToTimeline(timeline, experimentParams, preOrPost) {
+        timeline.push({
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: '',
+          choices: "NO_KEYS",
+          trial_duration: 0,
+          on_finish: function (data) {
+            experimentParams = DSBsummarycalc(experimentParams, preOrPost);
 
-              // Store the values in the data
-              if (preOrPost === 1) {
-                data.DSBpre_propcorrect = experimentParams.dyn_DSBpre_propcorrect;
-                data.DSBpre_maxspan = experimentParams.dyn_DSBpre_maxspan;
-                data.DSBpre_digitaccuracy = experimentParams.dyn_DSBpre_digitaccuracy;
-              } else {
-                data.DSBpost_propcorrect = experimentParams.dyn_DSBpost_propcorrect;
-                data.DSBpost_maxspan = experimentParams.dyn_DSBpost_maxspan;
-                data.DSBpost_digitaccuracy = experimentParams.dyn_DSBpost_digitaccuracy;
-              }
-              data.trial_type = "dsb-summary-calculation";
+            // Store the values in the data
+            if (preOrPost === 1) {
+              data.DSBpre_propcorrect = experimentParams.dyn_DSBpre_propcorrect;
+              data.DSBpre_maxspan = experimentParams.dyn_DSBpre_maxspan;
+              data.DSBpre_digitaccuracy = experimentParams.dyn_DSBpre_digitaccuracy;
+            } else {
+              data.DSBpost_propcorrect = experimentParams.dyn_DSBpost_propcorrect;
+              data.DSBpost_maxspan = experimentParams.dyn_DSBpost_maxspan;
+              data.DSBpost_digitaccuracy = experimentParams.dyn_DSBpost_digitaccuracy;
             }
-          });
-        }
+            data.trial_type = "dsb-summary-calculation";
+          }
+        });
+      }
+
+      //addVSearchCalculationToTimeline, similar to above, but to update vis search DVs.
+      function addVSearchCalculationToTimeline(timeline, experimentParams) {
+        timeline.push({
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: '',
+          choices: "NO_KEYS",
+          trial_duration: 0,
+          on_finish: function (data) {
+            data.trial_Type= 'vissearch-summary-calculation';
+            
+            let visData = jsPsych.data.get()
+              .filter({ task: 'VisSearch' })
+              .last(experimentParams.nRepeats);
+
+            // Calculate overall performance  
+            let correctCount = visData.filter({ is_correct: true }).count();
+            let totalCount = visData.count();
+            let propCorrect = correctCount / totalCount;
+
+            // Get all RT values (excluding null values)
+            let allTrials = visData.values();
+            let validRTs= [];
+            // Extract non-null RT values
+            for (let i = 0; i < allTrials.length; i++) {
+              if (allTrials[i].rt !== null && allTrials[i].rt !== undefined) {
+                validRTs.push(allTrials[i].rt);
+              }
+            }
+
+            // Calculate mean RT if there are valid RT values
+            let meanRT = 0;
+            if (validRTs.length > 0) {
+              let sum= validRTs.reduce((a,b)=>a+b,0); //avoids for loop.
+              //reduce() applies a function to each element in the array, accumulating a result
+              // (a, b) => a + b is an arrow function where:
+              // a is the accumulator (running total)
+              // b is the current element being processed
+              // 0 is the initial value of the accumulator
+
+              meanRT = sum / validRTs.length;
+            }
+            data.VISsearch_propcorrect = propCorrect;
+            data.VISsearch_meanRT= meanRT;
+            // Update experimentParams for later access
+            experimentParams.dyn_VS_propcorrect = propCorrect;
+            experimentParams.dyn_VS_meanRT = meanRT;
+      
+            console.log(`Visual Search Performance: 
+            - Proportion correct: ${(propCorrect * 100).toFixed(1)}% (${correctCount}/${totalCount})
+            - Mean RT: ${meanRT.toFixed(2)} ms`);
+          }
+      });
+    }
+
 
 // Usage:
 // addDSBCalculationToTimeline(timeline, experimentParams, 1); // For pre-test
@@ -1011,28 +1072,30 @@ function createVisualSearchTrial(searchDifficulty) {
 // addDSBCalculationToTimeline(timeline, experimentParams, 2); // For post-test
 
 
-      function consolidateTrialData(experimentParams) {
+      function consolidateTrialData() {
           return {
             type: jsPsychHtmlKeyboardResponse,
             stimulus: '',
             choices: "NO_KEYS",
             trial_duration: 0,
-            data: {
+            on_finish: function(data) { //on_finish is crucial so it is called during run time.
               // Pre-populate all values
-              block: experimentParams.dyn_block,
-              trial: experimentParams.dyn_trial,
-              trialidx: experimentParams.dyn_trialidx,
-              VisDifficulty: experimentParams.dyn_VSD,
-              Vis_meanRT: experimentParams.dyn_VS_meanRT,
-              Vis_propCorr: experimentParams.dyn_VS_propcorrect,
-              DSBpre_propcorrect: experimentParams.dyn_DSBpre_propcorrect,
-              DSBpre_maxspan: experimentParams.dyn_DSBpre_maxspan,
-              DSBpre_digitaccuracy: experimentParams.dyn_DSBpre_digitaccuracy,
-              DSBpost_propcorrect: experimentParams.dyn_DSBpost_propcorrect,
-              DSBpost_maxspan: experimentParams.dyn_DSBpost_maxspan,
-              DSBpost_digitaccuracy: experimentParams.dyn_DSBpost_digitaccuracy,
-              imageIDX: experimentParams.dyn_imageID,              
-              trial_type: "consolidated-trial-data"
+              data.block=  experimentParams.dyn_block;
+              data.trial= experimentParams.dyn_trial;
+              data.trialid= experimentParams.dyn_trialidx;
+              data.VisDifficulty =experimentParams.dyn_VSD;
+              data.Vis_meanRT = experimentParams.dyn_VS_meanRT;
+              data.Vis_propCorr= experimentParams.dyn_VS_propcorrect;
+              data.DSBpre_propcorrect= experimentParams.dyn_DSBpre_propcorrect;
+              data.DSBpre_maxspan= experimentParams.dyn_DSBpre_maxspan;
+              data.DSBpre_digitaccuracy= experimentParams.dyn_DSBpre_digitaccuracy;
+              data.DSBpost_propcorrect= experimentParams.dyn_DSBpost_propcorrect;
+              data.DSBpost_maxspan= experimentParams.dyn_DSBpost_maxspan;
+              data.DSBpost_digitaccuracy= experimentParams.dyn_DSBpost_digitaccuracy;
+              data.imageIDX= experimentParams.dyn_imageID;              
+              data.trial_type=  "consolidated-trial-data";
+              data.stimulus =   "consolidated-trial-data";
+              data.task =   "consolidated-trial-data";
             }
           };
         }
@@ -1053,34 +1116,33 @@ function createVisualSearchTrial(searchDifficulty) {
       timeline.push(messages.pracInstructions);
       timeline.push(customCalibration);
 
-      
-
-      //add instructions for the visual search task. 
-      timeline.push(messages.VisSearchInstructions);
-
       // practice trials have a unique structure (no images):
-      // we ree[eat the vis search task, and sweep through the DSB lengths]
       
-      // for (let i = 0; i < experimentParams.nPracticeTrials; i++) {
-      //   // Practice visual search
-      //   timeline.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
-      //   timeline.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
-      //   // timeline.push(createVisualSearchTrial(1)); // 1 of 2 difficulties.
-      //   // timeline.push(createVisualSearchTrial(2)); // 1 of 2 difficulties.
+      for (let i = 0; i < experimentParams.nPracticeTrials; i++) {
+        // Practice visual search
+        //add instructions for the visual search task. 
+        timeline.push(messages.VisSearchInstructions);
 
+        // show nRepeats of fixed difficulty. alternate based on nPracticetrials:
+        const currentDifficulty = (i%2 ===0)? 1:2;        
+          //push to timeline.
+          for (let irep = 0; irep < experimentParams.nRepeats; irep++) {
+            timeline.push(createVisualSearchTrial(currentDifficulty)); // 1 of 2 difficulties.)
+          }
 
-      //   // add instructions for the DSB task
-      //   timeline.push(messages.DSBinstructions);
-      //   //DSB (*)min to max span)
-      //   for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
-      //     timeline.push(messages.DSBinstructions);
-      //     timeline.push(createDigitSpanTask(iSpan));
-      //     timeline.push(createRecallTask());
-      //     timeline.push(feedbackTrial);
-      //   }
-      // } 
+        // add instructions for the DSB task
+        timeline.push(messages.DSBinstructions);
+        //DSB (*)min to max span)
+        for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
+          timeline.push(messages.DSBinstructions);
+          timeline.push(createDigitSpanTask(iSpan));
+          timeline.push(createRecallTask());
+          timeline.push(feedbackTrial); // note no feedback in exp proper.
+        }
+      } 
+
       // now include end of practice msg
-      // timeline.push(messages.expInstructions);
+      timeline.push(messages.expInstructions);
       
       // populate main experimental trials.
       
@@ -1090,7 +1152,6 @@ function createVisualSearchTrial(searchDifficulty) {
         for (let trial = 0; trial < experimentParams.nTrials; trial++) {
           
           trialidx=trialidx+1;
-          
           // for each trial sequence (ntrials per block)
 
           // Randomly add attention check
@@ -1101,13 +1162,17 @@ function createVisualSearchTrial(searchDifficulty) {
           const trialStart = {
                 type: jsPsychHtmlButtonResponse,
                 stimulus: `<div class="experiment-text" style= "font-size: ${48 * pixelsPerUnit / 150}px;">
-                    <p> Get ready to start Trial 1 of ${experimentParams.nTrials}, <br> <br>
-                        Block : ${block + 1} of ${experimentParams.nBlocks} </p>`,
-                choices: ['Start'],
+                    <p> Get ready to start Trial ${trial+1} of ${experimentParams.nTrials}, <br> <br>
+                        Block : ${block + 1} of ${experimentParams.nBlocks} </p>`,                    
+                choices: ['Start'],                
                 button_html: '<button style="font-size: 20px; padding: 15px 30px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">%choice%</button>',
                 on_finish: function (data) {
                     //replace stim with simple placeholder
                     data.stimulus = `block message`;
+                    //update at run time for data wrangling:
+                    experimentParams.dyn_block = block;
+                    experimentParams.dyn_trial = trial;
+                    experimentParams.dyn_trialidx = trialidx;
                 }
             };
 
@@ -1128,12 +1193,11 @@ function createVisualSearchTrial(searchDifficulty) {
           // show nRepeats of fixed difficulty.
           let currentDifficulty = Math.random() < 0.5 ? 1 : 2; // 1 of 2 difficulties.)
           
-          
           //push to timeline.
           for (let irep = 0; irep < experimentParams.nRepeats; irep++) {
             timeline.push(createVisualSearchTrial(currentDifficulty)); // 1 of 2 difficulties.)
           }
-
+          addVSearchCalculationToTimeline(timeline,experimentParams);
           //DSB (pre) sequence:
           timeline.push(messages.DSBinstructions);
 
@@ -1159,7 +1223,7 @@ function createVisualSearchTrial(searchDifficulty) {
           //get data for these last few trials:
           addDSBCalculationToTimeline(timeline, experimentParams, 2); // For post-test
           
-          timeline.push(consolidateTrialData(experimentParams));        
+          timeline.push(consolidateTrialData());        
           
         }
 
