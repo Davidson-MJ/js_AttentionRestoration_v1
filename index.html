@@ -137,7 +137,7 @@
               console.log("File upload successful");
               // Submit JSON data using callback approach
               console.log("Submitting JSON data to JATOS...");
-
+              
               jatos.submitResultData(jsonData, function () {
                 console.log("JSON data submitted successfully");
                 // Get participant ID from URL (with defensive checks)
@@ -149,7 +149,9 @@
                   debugLog(`SONA ID not found, using default`);
                 }
                 // Create completion URL for receiving credit
-                var completion_url = "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=93&credit_token=2e1c89bde83e447b8a413df54c340722&survey_code=" + pp_id;
+                
+                var completion_url = "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=98&credit_token=e9679869caf24c33adb4f8cda89b1dcd&survey_code" + pp_id;
+                
                 if (pp_id === "DEFAULT_ID") {
                   completion_url = "http://127.0.0.1:9000/jatos/4/11/results";
                 }
@@ -173,25 +175,27 @@
     // Set static and global experiment parameters
     let experimentParams = {
       // Block structure
-      nBlocks: 2,
-      nTrials: 2,
+      nBlocks: 4, // must be divisible by 2 (corresponding to search difficulties.)
+      nTrials: 9, // per block, note that this is divisible by 3 (per image types), and we will add one no-image per block.
       nPracticeTrials: 2, // this n is reps of both types -same as exp, absent the images.
 
       // Visual search parameters
       searchDifficulty: 1, //[1 or 2], easy or hard, updated dynamically below.      
       minDistancePercentage: 1, // min dist between elements.
-      containerPaddingPercentage: 5, // reduced to avoid stack overflow.
+      containerPaddingPercentage: 10, // reduced to avoid stack overflow.
       nTargs: 30,
       searchTrialDuration: 2500, // ms per search. 
-      nRepeats: 10, // how many reps per sequence?
+      nRepeats: 10, // how many reps per vis search sequence?
 
       // DSB parameters
-      minDigitSpan: 4,
-      maxDigitSpan: 8,
+      // DSBconds: [4,6,8], //span lengths.
+
+      // now just using the max.
+      maxDigitSpan: 8, //(n-1)
       digitDuration: 1000, //ms
 
       // Image parameters
-      nImages: 3,
+      nImages: 9,
       imgDuration: 15000, //ms 
 
       // Attention check parameters
@@ -207,10 +211,12 @@
       dyn_DSBpre_propcorrect: 0, //the  proportion of sequences correct.
       dyn_DSBpre_digitaccuracy: 0,//the number of digits correct.
       dyn_DSBpre_maxspan: 0, // the max span correct.
+      dyn_DSBpre_rt: null, // 
       dyn_imageID: 0, // image index/identifier.
       dyn_DSBpost_propcorrect: 0, //the  proportion of sequences correct.      
       dyn_DSBpost_digitaccuracy: 0, // the max span correct. 
       dyn_DSBpost_maxspan: 0,//the number of digits correct.
+      dyn_DSBpost_rt: null, 
 
     };
 
@@ -357,7 +363,7 @@
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);">
-           On the next screen, you must search for either a red</span> 
+           On the next screen, you must search for and CLICK ON either a red</span> 
             <span style="color: red;">"T"</span> or blue <span style="color: blue;">"O"</span><br>
              hidden among red <span style="color: red;">"X"</span>s. </div>
         `,
@@ -409,6 +415,44 @@
 
     };
 
+    const demographicsForm = {
+        type: jsPsychSurveyHtmlForm,
+        preamble: '<div style="color: white; text-align: center;"><h2>Demographic Information</h2><p>Please provide the following information:</p></div>',
+        html: `
+        <div style="display: flex; flex-direction: column; align-items: center; color: white;">
+            <div style="margin-bottom: 20px; text-align: left; width: 80%; max-width: 500px;">
+                <label for="age" style="display: block; margin-bottom: 5px;">What is your age (in years)?:</label>
+                <input type="number" id="age" name="age" min="18" max="100" required style="width: 100%; padding: 8px; font-size: 16px;">
+            </div>
+            
+            <div style="margin-bottom: 20px; text-align: left; width: 80%; max-width: 500px;">
+                <label for="gender" style="display: block; margin-bottom: 5px;">What is your gender?</label>
+                <select id="gender" name="gender" required style="width: 100%; padding: 8px; font-size: 16px;">
+                    <option value="" selected disabled>Please select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non-binary">Non-binary</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+            </div>
+        </div>
+    `,
+        button_label: 'Continue',
+        data: {
+            task: 'demographics'
+        },
+        on_finish: function (data) {
+            // Log the demographic data
+            console.log("Demographics collected:", data.response);
+
+            // Add to global jsPsych data properties
+            jsPsych.data.addProperties({
+                participant_age: data.response.age,
+                participant_gender: data.response.gender
+            });
+        }
+    };
 
     const feedbackTrial = {
       type: jsPsychHtmlButtonResponse,
@@ -426,17 +470,18 @@
     };
 
     // survey variable 
-    
+  
     const PRSpreamble={
       type: jsPsychHtmlButtonResponse,
       stimulus: ` <div class = "experiment-text"; style= "font-size: ${24 * pixelsPerUnit / 150}px;">
-      We are intereted in how you experienced this environment. <br>
-      To help us understand your experience, we have provided the following statements for you to respond to.<br> 
-      Please read carefully, then ask yourself: 
+      We are interested in how you experienced this environment. <br>
+      To help us understand your experience,<br>
+      we have provided the following statements for you to respond to.<br> <br>
+      Please read carefully, then ask yourself: <br>
       "how much does this statement apply to my experience here?". <br>
-      To indicate your answer choose one number from the rating scale beside each statement.
-      So, for example, if you think the statement does not apply to you at all, choose "0" (not at all).
-      If you think it applies completely, you would select "10".
+      To indicate your answer choose one number from the rating scale beside each statement.<br><br>
+      So, for example, if you think the statement does not apply to you at all, choose "0" (not at all).<br>
+      If you think it applies completely, you would select "10" (complete agreement).<br>
       </div>`,
       choices: ['Continue'],
       button_html: '<button class="standard-button">%choice%</button>',
@@ -477,7 +522,7 @@
       return {
         type: jsPsychSurveyLikert,
         preamble: `<div style="text-align: center; margin-bottom: 30px;">
-          <img src="images/photo_${imgNumber}.jpg" style="max-width: 80%; max-height: 50vh; border-radius: 10px; box-shadow: 0 0 10px rgba(255,255,255,0.2);">
+          <img src="images/set_1/photo_${imgNumber}.jpg" style="max-width: 80%; max-height: 50vh; border-radius: 10px; box-shadow: 0 0 10px rgba(255,255,255,0.2);">
           <div style="color: white; font-size: ${24 * pixelsPerUnit / 150}px;">
           <p>Please rate how much each statement applies to your experience of this image:</p>
           </div>
@@ -523,12 +568,58 @@
         } 
       };
     }
+    function createRateAIlikelihood(imgNumber,setN) {
+      return {
+        type: jsPsychSurveyLikert,
+        preamble: `<div style="text-align: center; margin-bottom: 30px;">
+          <img src="images/set_${setN}/photo_${imgNumber}.jpg" style="max-width: 80%; max-height: 50vh; border-radius: 10px; box-shadow: 0 0 10px rgba(255,255,255,0.2);">
+          <div style="color: white; font-size: ${24 * pixelsPerUnit / 150}px;">          
+          </div>
+          </div>`,
+        questions: [
+          { prompt: "Please rate how likely it is that this image was artificially generated:", 
+            name: 'rateAI', labels: 
+            ["Certainly not", "Unlikely", "Unsure", "Likely", "Certainly"],
+            required: true,
+           },
+          
+        ],
+        randomize_question_order: false,
+        scale_width: 500,
+        button_label: 'Continue',
+        data: {
+          task: 'rate-AI'  ,
+          image_id: imgNumber,        
+          iamge_set: setN
+        },
+        // Add custom styling for white text
+        on_load: function () {
+          // Make all text elements white for dark background
+          document.querySelectorAll('.jspsych-survey-likert-statement').forEach(element => {
+            element.style.color = 'white';
+          });
+          // Add CSS to make the survey labels white and centered
+          const styleElement = document.createElement('style');
+          styleElement.textContent = `
+          .jspsych-survey-likert-opt-label {
+            color: white !important;
+            text-align: center !important;
+          }
+        `;
+          document.head.appendChild(styleElement);
+        },
+        on_finish: function (data) {
+          //replace stim with simple placeholder
+          data.stimulus = `rate-AI`;          
+        } 
+      };
+    }
 
 
     // Preload images
     const preloadImages = {
       type: jsPsychPreload,
-      images: Array.from({ length: experimentParams.nImages }, (_, i) => `images/photo_${i + 1}.jpg`),
+      images: Array.from({ length: experimentParams.nImages }, (_, i) => `images/set_1/photo_${i + 1}.jpg`),
       message: 'Loading experiment resources...',
       show_progress_bar: true,
       continue_after_error: true,
@@ -541,19 +632,24 @@
 
     // Attention check trial
     function createAttentionCheck() {
+      const targetButtonIndex = Math.floor(Math.random() * 3);
+      const buttonLabels = ['Stop', 'Continue', 'Next'];
+      const targetButtonLabel = buttonLabels[targetButtonIndex]; 
+
       return {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
           <div style="text-align: center;">
-            <p>Attention Check: Please select the button labeled "Continue"</p>
+            <p>Attention Check: Please select the button labeled "${targetButtonLabel}"</p>
           </div>
         `,
         choices: ['Stop', 'Continue', 'Next'],
         on_finish: function (data) {
-          data.is_attention_check = true;
-          data.attention_check_correct = data.response === 1;
+          
+          data.attention_check_correct = data.response === targetButtonIndex;
           data.stimulus = 'attncheck';
           data.task = 'attncheck'
+          data.target_button= targetButtonLabel;
         }
       };
     }
@@ -561,14 +657,24 @@
 
 
     function callSingleImageTrial(imgID) {
+      let stimulusContent;
+      if (imgID===10) { // show only a fixation cross
+        stimulusContent= `
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+          <div style="font-size: ${24 * pixelsPerUnit / 150}px; color: white;">+</p>
+            </div>`;  
+      } else {
+        
+        stimulusContent = `
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90vw; height: 90vh; display: flex; justify-content: center; align-items: center; overflow: hidden;">
+          <img src="images/set_1/photo_${imgID}.jpg" 
+          style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          </div>`;
+      }
+      
       return {
         type: jsPsychHtmlKeyboardResponse,
-        stimulus: `
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <img src="images/photo_${imgID}.jpg" 
-              style="width: 100vw; height: 100vh; object-fit: cover; border-radius: 30px; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);">
-        </div>`,
-
+        stimulus: stimulusContent,
         choices: "NO_KEYS", // No response required
         trial_duration: experimentParams.imgDuration, // Hold 
         on_load: () => {
@@ -578,7 +684,35 @@
           data.stimulus = `img${imgID}`;        
           data.task = `img${imgID}`;
           experimentParams.dyn_imageID = imgID;
-        }
+          // store some information about the iamges. currrently hardcoded:
+          // photo 1,2,3 = low,med,high, (real,ai,ai).
+          // photo 4,5,6 = low,med,high, (ai,real,ai).
+          // photo 7,8,9= low,med,high (ai,ai,real).  
+          // photo 10= fixation cross
+          // 1,4,7 = low, 2,5,8 = med, 3,6,9 = high.
+            // Store vegetation level and image type
+          if (imgID >= 1 && imgID <= 9) {
+          // Vegetation level: 1,4,7=low(1); 2,5,8=medium(2); 3,6,9=high(3)
+          if (imgID === 1 || imgID === 4 || imgID === 7) {
+            data.vegetationLevel = 1; // Low
+          } else if (imgID === 2 || imgID === 5 || imgID === 8) {
+            data.vegetationLevel = 2; // Medium
+          } else if (imgID === 3 || imgID === 6 || imgID === 9) {
+            data.vegetationLevel = 3; // High
+          }
+          
+            // Image type: 1,5,9=real(1); others=AI(2)
+            if (imgID === 1 || imgID === 5 || imgID === 9) {
+              data.imageType = 1; // Real
+            } else {
+              data.imageType = 2; // AI
+            }
+          } else if (imgID === 10) {
+            // Fixation cross
+            data.vegetationLevel = null;
+            data.imageType = null;
+          }
+          }
         
       }
     }
@@ -616,8 +750,8 @@
         const y = padding + (cell.row + 0.5) * cellHeight; // Center of the cell
 
         // Add jitter (small offsets)
-        const jitterX = (Math.random() - 0.5) * cellWidth * 0.8; // ±40% of cell
-        const jitterY = (Math.random() - 0.5) * cellHeight * 0.8; // ±40% of cell
+        const jitterX = (Math.random() - 0.5) * cellWidth * 0.6; // ±30% of cell
+        const jitterY = (Math.random() - 0.5) * cellHeight * 0.6; // ±30% of cell
 
         // Convert to percentages
         const xPercent = ((x + jitterX) / containerWidth) * 100;
@@ -630,24 +764,29 @@
     }
 
 function createVisualSearchTrial(searchDifficulty) {
+    const containerWidth = window.innerWidth * 0.6;
+    const containerHeight = window.innerHeight * 0.6;
     const itemSize = pixelsPerUnit* 0.5; // Adjusts to relevant size
-    // debugger;
+    
+
     return {
       type: jsPsychHtmlButtonResponse,
       stimulus: () => {
         const positions = generateGridPositions(
           experimentParams.nTargs + 1,
-          window.innerWidth*0.8 ,
-          window.innerHeight*0.8,          
+          containerWidth,
+          containerHeight,          
           experimentParams.containerPaddingPercentage
         );
         debugLog( "generatedpositions:", positions )
-        let stimulusHTML = `<div style="width: 90vw; height: 90vh; background-color: #f0f0f0; position: relative; margin: auto; border-radius: 10px;">`;
+        let stimulusHTML = `<div style="width: 90vw; height: 90vh; background-color: #f0f0f0; position: relative; margin: auto; border-radius: 1px;">`;
 
         for (let i = 0; i < experimentParams.nTargs; i++) {
           const pos = positions[i];
           const rotation = Math.random() * 360;
-          stimulusHTML += `<div class="search-item responsive" style="position: absolute; top: ${pos.y}%; left: ${pos.x}%; width: ${itemSize}px; height: ${itemSize}px; color: red; text-shadow: 0 0 3px white; font-weight: bold; transform: rotate(${rotation}deg);">X</div>`;
+          stimulusHTML += `<div class="search-item responsive" style="position: absolute;
+           top: ${pos.y}%; left: ${pos.x}%; width: ${itemSize}px; height: ${itemSize}px;
+            color: red; text-shadow: 0 0 3px white; font-weight: bold; transform: rotate(${rotation}deg);">X</div>`;
         }
 
         const targetPos = positions[experimentParams.nTargs];
@@ -655,7 +794,9 @@ function createVisualSearchTrial(searchDifficulty) {
         const targetColor = searchDifficulty === 1 ? 'blue' : 'red';
         const targetShape = searchDifficulty === 1 ? 'O' : 'T';
 
-        stimulusHTML += `<div id="target" class="search-item search-target responsive" style="position: absolute; top: ${targetPos.y}%; left: ${targetPos.x}%; width: ${itemSize}px; height: ${itemSize}px; color: ${targetColor}; text-shadow: 0 0 3px white; font-weight: bold; cursor: pointer; transform: rotate(${targetRotation}deg);">${targetShape}</div>`;
+        stimulusHTML += `<div id="target" class="search-item search-target responsive" style="position: absolute;
+         top: ${targetPos.y}%; left: ${targetPos.x}%; width: ${itemSize}px; height: ${itemSize}px;
+          color: ${targetColor}; text-shadow: 0 0 3px white; font-weight: bold; cursor: pointer; transform: rotate(${targetRotation}deg);">${targetShape}</div>`;
 
         stimulusHTML += '</div>';
         return stimulusHTML;
@@ -744,7 +885,7 @@ function createVisualSearchTrial(searchDifficulty) {
             digitsforCurrentTrial.push(Math.floor(Math.random() * 10));
           }
           
-          console.log('current digits:', digitsforCurrentTrial);
+          // console.log('current digits:', digitsforCurrentTrial);
 
           let currentDigitIndex = 0;
           let timeoutId; // store the timeoutID for cleanup
@@ -798,6 +939,7 @@ function createVisualSearchTrial(searchDifficulty) {
       };
     }
 
+    
     function createRecallTask() {
       return {
         type: jsPsychHtmlButtonResponse,
@@ -814,62 +956,99 @@ function createVisualSearchTrial(searchDifficulty) {
                 `<button class="digit-button" style="font-size: 24px; width: 40px; height: 40px; margin: 5px;" data-value="${num}">${num}</button>`
             )
             .join('')}
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="reset-button" style="font-size: 18px; padding: 8px 15px; margin-right: 10px;">Start Over</button>
+          <button id="continue-button" style="font-size: 18px; padding: 8px 15px; display: none;">Continue</button>
         </div>`,
         choices: '',
         prompt: '<p>Click the numbers in the correct order.</p>',
         data: {
-          task: 'DSBrecall'          
+          task: 'DSBrecall'
         },
         on_load: () => {
           const lastTrial = jsPsych.data.get().last(1).values()[0];
           const reversedDigits = lastTrial.reversedDigits;
           const currentSpan = lastTrial.currentSpanLength;
 
-          const userResponse = [];
+          let userResponse = [];
           let clickedCount = 0;
+          // RT tracking:
+          let startTime= null;
+          let endTime=null;
 
-          const responseDisplay = document.getElementById('response-display'); // The new display
-           // Clear the placeholder content
+          const responseDisplay = document.getElementById('response-display');
+          const continueButton = document.getElementById('continue-button');
+          const resetButton = document.getElementById('reset-button');
+
+          // Clear the placeholder content
           responseDisplay.innerHTML = '';
-          const buttons = document.querySelectorAll('.digit-button');
 
+          // Function to update the response display
+          const updateDisplay = () => {
+            responseDisplay.textContent = userResponse.join(' ');
+
+            // Show/hide the continue button based on response count
+            if (clickedCount === currentSpan) {
+              continueButton.style.display = 'inline-block';
+            } else {
+              continueButton.style.display = 'none';
+            }
+          };
+
+          // Function to reset responses
+          const resetResponses = () => {
+            userResponse = [];
+            clickedCount = 0;
+            updateDisplay();
+          };
+
+          // Add click event for the reset button
+          resetButton.addEventListener('click', resetResponses);
+
+          // Add click event for the continue button
+          continueButton.addEventListener('click', () => {
+            endTime=performance.now();
+            const rt= endTime-startTime;
+
+            const userAnswer = userResponse.join('');
+            const isCorrect = userAnswer === reversedDigits;
+
+            // Count individual digit matches
+            let correctDigits = 0;
+            const expectedDigits = reversedDigits.split('');
+
+            // Count correct digits in the right positions
+            for (let i = 0; i < userResponse.length; i++) {
+              if (userResponse[i] === expectedDigits[i]) {
+                correctDigits++;
+              }
+            }
+
+            jsPsych.finishTrial({
+              is_correct: isCorrect,
+              response: userAnswer,
+              span_length: currentSpan,
+              correct_digits: correctDigits,
+              digit_accuracy: correctDigits / currentSpan,
+              rt: rt,
+            });
+          });
+
+          // Add click events for digit buttons
+          const buttons = document.querySelectorAll('.digit-button');
           buttons.forEach((button) => {
             button.addEventListener('click', () => {
-              userResponse.push(button.dataset.value);
-              clickedCount++;
-
-              // Update response display
-              responseDisplay.textContent = userResponse.join(' ');
-
-              if (clickedCount === currentSpan) {
-                const userAnswer = userResponse.join('');
-                const isCorrect = userAnswer === reversedDigits;
-
-                // also count individual digit matches: 
-                let correctDigits = 0;
-                const expectedDigits = reversedDigits.split('');
-
-                // Count correct digits in the right positions
-                for (let i = 0; i < userResponse.length; i++) {
-                  if (userResponse[i] === expectedDigits[i]) {
-                    correctDigits++;
-                  }
-                }
-                jsPsych.finishTrial({
-                  is_correct: isCorrect,
-                  response: userAnswer,
-                  span_length: currentSpan,
-                  correct_digits: correctDigits,
-                  digit_accuracy: correctDigits/currentSpan,
-
-                });
+              if (clickedCount < currentSpan) {
+                userResponse.push(button.dataset.value);
+                clickedCount++;
+                updateDisplay();
               }
             });
           });
         },
-        on_finish: function (data){
-          data.stimulus= 'DSBrecall';
-          
+        on_finish: function (data) {
+          data.stimulus = 'DSBrecall';
         }
       };
     }
@@ -929,63 +1108,128 @@ function createVisualSearchTrial(searchDifficulty) {
         }
       };
   
-    // for help with data wrangling, create a function to consolidate data.
+        // function to shuffle the vis search difficulty across blocks (hold constant within).
+        function getBalancedBetweenBlockConditions(numBlocks) {
+            // Calculate how many of each condition we need
+            const conditionsPerType = Math.floor(numBlocks / 2); // 2 conditions (vis search easy and hard)
+
+            // Create an array with equal numbers of each condition
+            let conditions = [];
+
+            // Add condition 1 (conditionsPerType times)
+            for (let i = 0; i < conditionsPerType; i++) {
+                conditions.push(1);
+            }
+
+            // Add condition 2 (conditionsPerType times)
+            for (let i = 0; i < conditionsPerType; i++) {
+                conditions.push(2);
+            }
+
+            // If there are any remaining blocks due to division remainder
+            const remaining = numBlocks - (conditionsPerType * 2);
+            for (let i = 0; i < remaining; i++) {
+                conditions.push(i + 1); // Add conditions 1, 2, etc. for remaining blocks
+            }
+
+            // Shuffle the array
+            conditions = jsPsych.randomization.shuffle(conditions);
+
+            return conditions;
+        }
+        // can call now (used in trial loop below);
+        const searchperBlock= getBalancedBetweenBlockConditions(experimentParams.nBlocks);
+        
+        
+        // Set up balanced conditions for a block, these are the image types within a block (1-3)
+        function getBalancedWithinBlockConditions(numTrials) {
+            // Calculate how many of each condition we need
+            const conditionsPerType = Math.floor(numTrials / 3); // low medium and high images, and no.
+
+            // Create an array with equal numbers of each condition
+            let conditions = [];
+
+            // Add condition 1 (conditionsPerType times)
+            for (let i = 0; i < conditionsPerType; i++) {
+                conditions.push(1);
+            }
+
+            // Add condition 2 (conditionsPerType times)
+            for (let i = 0; i < conditionsPerType; i++) {
+                conditions.push(2);
+            }
+
+            // Add condition 3 (conditionsPerType times)
+            for (let i = 0; i < conditionsPerType; i++) {
+                conditions.push(3);
+            }
+
+            //push a single no image condition
+            conditions.push(0);
+            
+            // If there are any remaining trials due to division remainder
+            const remaining = numTrials - (conditionsPerType * 3);
+            for (let i = 0; i < remaining; i++) {
+                conditions.push(i + 1); // Add conditions 1, 2, etc. for remaining trials
+            }
+
+            // Shuffle the array
+            conditions = jsPsych.randomization.shuffle(conditions);
+
+            return conditions;
+        }
+
+        //test: 
+        const blockConditions = getBalancedWithinBlockConditions(experimentParams.nTrials);
+        debugLog(blockConditions);
+
+      // for help with data wrangling, create a function to consolidate data.
       
     function DSBsummarycalc(experimentParams, PreorPost) {
         // Filter recent recall data
         let recallData = jsPsych.data.get()
           .filter({ task: 'DSBrecall' })
-          .last(experimentParams.maxDigitSpan - experimentParams.minDigitSpan);
+          .last(1); // only get the last one, since we now only use Span ==8, else adjust as needed.
 
         // Calculate overall performance
-        let correctCount = recallData.filter({ is_correct: true }).count();
-        let totalCount = recallData.count();
-        let propCorrect = correctCount / totalCount;
+        // let correctCount = recallData.filter({ is_correct: true }).count();
+        // let totalCount = recallData.count();
+        // let propCorrect = correctCount / totalCount;
 
         // Get all trials as array for easier processing
-        const trials = recallData.values();
-
-        // Find max span correct
-        let maxCorrectSpan = 0;
-        for (let i = 0; i < trials.length; i++) {
-          if (trials[i].is_correct && trials[i].span_length > maxCorrectSpan) {
-            maxCorrectSpan = trials[i].span_length;
-          }
-        }
+        const trial = recallData.values()[0];
 
         // Calculate digit-level accuracy
-        let totalDigits = 0;
-        let totalCorrectDigits = 0;
+            const totalDigits = trial.span_length;  // Should be 8
+            const totalCorrectDigits = trial.correct_digits;
+            const digitAccuracy = totalDigits > 0 ? totalCorrectDigits / totalDigits : 0;
 
-        // Sum up the values from all trials
-        for (let i = 0; i < trials.length; i++) {
-          totalDigits += trials[i].span_length;
-          totalCorrectDigits += trials[i].correct_digits;
-        }
+            // Determine if the response was completely correct
+            const isCorrect = trial.is_correct;
 
-        // Calculate the proportion
-        const digitAccuracy = totalDigits > 0 ? totalCorrectDigits / totalDigits : 0;
+            // Update dynamic fields based on PreorPost value
+            if (PreorPost === 1) { // Pre-test
+              experimentParams.dyn_DSBpre_propcorrect = isCorrect ? 1 : 0;
+              experimentParams.dyn_DSBpre_maxspan = isCorrect ? totalDigits : 0;
+              experimentParams.dyn_DSBpre_digitaccuracy = digitAccuracy;
+              experimentParams.dyn_DSBpre_rt = trial.rt;
 
-        // Update dynamic fields based on PreorPost value
-        if (PreorPost === 1) { // Pre-test
-          experimentParams.dyn_DSBpre_propcorrect = propCorrect;
-          experimentParams.dyn_DSBpre_maxspan = maxCorrectSpan;
-          experimentParams.dyn_DSBpre_digitaccuracy = digitAccuracy;
-        } else if (PreorPost === 2) { // Post-test
-          experimentParams.dyn_DSBpost_propcorrect = propCorrect;
-          experimentParams.dyn_DSBpost_maxspan = maxCorrectSpan;
-          experimentParams.dyn_DSBpost_digitaccuracy = digitAccuracy;
-        }
+            } else if (PreorPost === 2) { // Post-test
+              experimentParams.dyn_DSBpost_propcorrect = isCorrect ? 1 : 0;
+              experimentParams.dyn_DSBpost_maxspan = isCorrect ? totalDigits : 0;
+              experimentParams.dyn_DSBpost_digitaccuracy = digitAccuracy;
+              experimentParams.dyn_DSBpost_rt = trial.rt;
+            }
 
-          // Log summary for debugging
-          console.log(`DSB ${PreorPost === 1 ? 'Pre' : 'Post'} Performance: 
-        - Proportion correct: ${(propCorrect * 100).toFixed(1)}% (${correctCount}/${totalCount})
-        - Max correct span: ${maxCorrectSpan}
-        - Digit accuracy: ${(digitAccuracy * 100).toFixed(1)}%`);
+            // Log summary for debugging
+            console.log(`DSB ${PreorPost === 1 ? 'Pre' : 'Post'} 
+            Performance: - Completely correct: ${isCorrect ? 'Yes' : 'No'} - Max correct span: ${isCorrect ? totalDigits : 0} - Digit accuracy: ${(digitAccuracy * 100).toFixed(1)}%`);
 
-        // Return updated experimentParams
-        return experimentParams;
+            // Return updated experimentParams
+            return experimentParams;
       }
+
+
     // the above function needs to be within a timeline variable to collect data during runtime.
       function addDSBCalculationToTimeline(timeline, experimentParams, preOrPost) {
         timeline.push({
@@ -1001,10 +1245,12 @@ function createVisualSearchTrial(searchDifficulty) {
               data.DSBpre_propcorrect = experimentParams.dyn_DSBpre_propcorrect;
               data.DSBpre_maxspan = experimentParams.dyn_DSBpre_maxspan;
               data.DSBpre_digitaccuracy = experimentParams.dyn_DSBpre_digitaccuracy;
+              data.DSBpre_rt = experimentParams.dyn_DSBpre_rt;
             } else {
               data.DSBpost_propcorrect = experimentParams.dyn_DSBpost_propcorrect;
               data.DSBpost_maxspan = experimentParams.dyn_DSBpost_maxspan;
               data.DSBpost_digitaccuracy = experimentParams.dyn_DSBpost_digitaccuracy;
+              data.DSBpost_rt = experimentParams.dyn_DSBpost_rt;
             }
             data.trial_type = "dsb-summary-calculation";
           }
@@ -1092,7 +1338,32 @@ function createVisualSearchTrial(searchDifficulty) {
               data.DSBpost_propcorrect= experimentParams.dyn_DSBpost_propcorrect;
               data.DSBpost_maxspan= experimentParams.dyn_DSBpost_maxspan;
               data.DSBpost_digitaccuracy= experimentParams.dyn_DSBpost_digitaccuracy;
-              data.imageIDX= experimentParams.dyn_imageID;              
+              data.imageIDX= experimentParams.dyn_imageID; 
+               // Add vegetation level and image type information based on imageIDX
+              const imgID = experimentParams.dyn_imageID;
+
+              // Only process for images 1-9, not for fixation cross (10)
+              if (imgID >= 1 && imgID <= 9) {
+                // Determine vegetation level
+                if (imgID === 1 || imgID === 4 || imgID === 7) {
+                  data.vegetationLevel = 1; // Low
+                } else if (imgID === 2 || imgID === 5 || imgID === 8) {
+                  data.vegetationLevel = 2; // Medium
+                } else if (imgID === 3 || imgID === 6 || imgID === 9) {
+                  data.vegetationLevel = 3; // High
+                }
+
+                // Determine image type
+                if (imgID === 1 || imgID === 5 || imgID === 9) {
+                  data.imageType = 1; // Real
+                } else {
+                  data.imageType = 2; // AI
+                }
+              } else {
+                // For the fixation cross or any other cases
+                data.vegetationLevel = null;
+                data.imageType = null;
+              }
               data.trial_type=  "consolidated-trial-data";
               data.stimulus =   "consolidated-trial-data";
               data.task =   "consolidated-trial-data";
@@ -1105,12 +1376,13 @@ function createVisualSearchTrial(searchDifficulty) {
     
       const timeline = [];
 
-
+     
       // Add preload
       timeline.push(preloadImages);
-
+      
       timeline.push(messages.Welcome);
       timeline.push(messages.PISdoc);  
+      timeline.push(demographicsForm);
         
       //prac Instructions
       timeline.push(messages.pracInstructions);
@@ -1132,14 +1404,24 @@ function createVisualSearchTrial(searchDifficulty) {
 
         // add instructions for the DSB task
         timeline.push(messages.DSBinstructions);
+        timeline.push(createDigitSpanTask(4)); //start easy.
+        timeline.push(createRecallTask());
+        timeline.push(feedbackTrial); // note no feedback in exp proper.
+
+        timeline.push(messages.DSBinstructions);
+        timeline.push(createDigitSpanTask(experimentParams.maxDigitSpan)); // actual span.
+        timeline.push(createRecallTask());
+        timeline.push(feedbackTrial); // note no feedback in exp proper.
+
         //DSB (*)min to max span)
-        for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
-          timeline.push(messages.DSBinstructions);
-          timeline.push(createDigitSpanTask(iSpan));
-          timeline.push(createRecallTask());
-          timeline.push(feedbackTrial); // note no feedback in exp proper.
-        }
-      } 
+        // for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {
+          // timeline.push(messages.DSBinstructions);
+          // timeline.push(createDigitSpanTask(iSpan));
+          // timeline.push(createRecallTask());
+          // timeline.push(feedbackTrial); // note no feedback in exp proper.
+        // }
+
+      } //for practice trials
 
       // now include end of practice msg
       timeline.push(messages.expInstructions);
@@ -1148,8 +1430,17 @@ function createVisualSearchTrial(searchDifficulty) {
       
       let trialidx=-1; // counter
       
-      for (let block = 0; block < experimentParams.nBlocks; block++) {
-        for (let trial = 0; trial < experimentParams.nTrials; trial++) {
+      for (let iblock = 0; iblock < experimentParams.nBlocks; iblock++) {
+
+        // work out the image type for each trial in this block:
+        let imgindex = [1,2,3,4,5,6,7,8,9,10];
+        imgindex= jsPsych.randomization.shuffle(imgindex);
+
+        // const blockConditions = getBalancedWithinBlockConditions(experimentParams.nTrials);
+
+        let currentDifficulty = searchperBlock[iblock]; // 1 or 2, shown for nRepeats below (pre DSB1)
+
+        for (let itrial = 0; itrial < experimentParams.nTrials+1; itrial++) { // +1 to include the last trial (no image)
           
           trialidx=trialidx+1;
           // for each trial sequence (ntrials per block)
@@ -1162,16 +1453,16 @@ function createVisualSearchTrial(searchDifficulty) {
           const trialStart = {
                 type: jsPsychHtmlButtonResponse,
                 stimulus: `<div class="experiment-text" style= "font-size: ${48 * pixelsPerUnit / 150}px;">
-                    <p> Get ready to start Trial ${trial+1} of ${experimentParams.nTrials}, <br> <br>
-                        Block : ${block + 1} of ${experimentParams.nBlocks} </p>`,                    
+                    <p> Get ready to start Trial ${itrial+1} of ${experimentParams.nTrials+1}, <br> <br>
+                        Block : ${iblock + 1} of ${experimentParams.nBlocks} </p>`,                    
                 choices: ['Start'],                
                 button_html: '<button style="font-size: 20px; padding: 15px 30px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">%choice%</button>',
                 on_finish: function (data) {
                     //replace stim with simple placeholder
                     data.stimulus = `block message`;
                     //update at run time for data wrangling:
-                    experimentParams.dyn_block = block;
-                    experimentParams.dyn_trial = trial;
+                    experimentParams.dyn_block = iblock;
+                    experimentParams.dyn_trial = itrial;
                     experimentParams.dyn_trialidx = trialidx;
                 }
             };
@@ -1182,16 +1473,13 @@ function createVisualSearchTrial(searchDifficulty) {
           // add trial sequence. 
           // order is currently fixed too:
           // -  vis search (easy or hard), with nRepeats
-          // -  DSB, (min length 4-> max 8)
+          // -  DSB, (now just 8 - fixed)
           // - image
           // - DSB recall 
 
           //Vis search
           // instructions:
           timeline.push(messages.VisSearchInstructions)
-
-          // show nRepeats of fixed difficulty.
-          let currentDifficulty = Math.random() < 0.5 ? 1 : 2; // 1 of 2 difficulties.)
           
           //push to timeline.
           for (let irep = 0; irep < experimentParams.nRepeats; irep++) {
@@ -1200,26 +1488,35 @@ function createVisualSearchTrial(searchDifficulty) {
           addVSearchCalculationToTimeline(timeline,experimentParams);
           //DSB (pre) sequence:
           timeline.push(messages.DSBinstructions);
-
-          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {            
-            timeline.push(createDigitSpanTask(iSpan));
-            timeline.push(createRecallTask());
-          }
+          timeline.push(createDigitSpanTask(experimentParams.maxDigitSpan));
+          timeline.push(createRecallTask());
+          
+          // for (let iSpan = 0; iSpan < experimentParams.DSBconds.length; iSpan++) {
+          //   timeline.push(createDigitSpanTask(experimentParams.DSBconds[iSpan]));
+          //   timeline.push(createRecallTask());
+          // }
+          
           addDSBCalculationToTimeline(timeline, experimentParams, 1); // For pre-test
           
           
           // show image.
-          let im2show = Math.floor(Math.random() * experimentParams.nImages) + 1;
+          let im2show = imgindex[itrial];
           timeline.push(messages.imageInstructions);
           timeline.push(callSingleImageTrial(im2show));
 
 
           //DSB (post)
           timeline.push(messages.DSBinstructions);
-          for (let iSpan = experimentParams.minDigitSpan; iSpan < experimentParams.maxDigitSpan; iSpan++) {            
-            timeline.push(createDigitSpanTask(iSpan));
-            timeline.push(createRecallTask());
-          }
+          timeline.push(createDigitSpanTask(experimentParams.maxDigitSpan));
+          timeline.push(createRecallTask());
+
+          // timeline.push(messages.DSBinstructions);
+          
+          // for (let iSpan = 0; iSpan < experimentParams.DSBconds.length; iSpan++) {
+          //   timeline.push(createDigitSpanTask(experimentParams.DSBconds[iSpan]));
+          //   timeline.push(createRecallTask());
+          // }
+
           //get data for these last few trials:
           addDSBCalculationToTimeline(timeline, experimentParams, 2); // For post-test
           
@@ -1231,20 +1528,20 @@ function createVisualSearchTrial(searchDifficulty) {
 
     // collect ratings of restorativeness per image:
     timeline.push(PRSpreamble);
-      for (let imgn = 1; imgn < 4; imgn++) {
+      for (let imgn = 1; imgn < 10; imgn++) {
         timeline.push(createPRS11(imgn));
       }      
-    timeline.push(messages.Debriefdoc); 
-    jsPsych.run(timeline);//
-
-    // jsPsych.run(generateDSBTrials(3,8));
-    // initializeProgressBar(timeline)
-    // or test in isolation (debug)
-    // jsPsych.run([interBlockmsg(1,1)]);
-    // jsPsych.run([createDigitSpanTask(currentSpan), createRecallTask()]);
+      // important to ask about AI AFTER the restorativeness ratings.
+      
+      for (let imgn = 1; imgn < 10; imgn++) {
+        timeline.push(createRateAIlikelihood(imgn,1));
+      }      
+      
+      timeline.push(messages.Debriefdoc); 
     
+      jsPsych.run(timeline);//
 
-    ////
+    
 
 
   </script>
