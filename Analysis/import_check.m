@@ -1,0 +1,172 @@
+% import check
+cd('/Users/164376/Documents/GitHub/js_AttentionRestoration_v1/Analysis/');
+cd('Raw_data')
+
+%% pseudo code.
+% load csv as .mat
+% delete unused columns. 
+
+%loa
+mytab=readtable("experiment-data (44).csv");
+%% delete the bloat columns, single entries we dont need. 
+del_columns={'success',...
+    'timeout',...
+    'failed_images',...
+    'failed_video',...
+    'failed_audio',...
+    'internal_node_id'};
+for icol= 1:length(del_columns);
+
+try mytab.([del_columns{icol}])=[];
+catch; disp(['no "' del_columns{icol} '" column']);
+end
+end
+% also to make this easy. convert all iscorrect strings into binary.
+mytab.is_correctBinary = contains(mytab.is_correct,'true');
+mytab= movevars(mytab,'is_correctBinary','After','is_correct');
+%% there are various instructions and practice screens/trials recorded in the output. 
+% the experiment proper begins at the first 'stimulus==block message'
+
+%first sanity check, show vis search results in practice for easy vs hard.
+
+%
+exp_startrow = find(contains(mytab.stimulus,'expInstruc'), 1,'last');
+
+%% vis search rows in practice
+% visSearch= find(contains(mytab.stimulus(1:exp_startrow),'VisSearch'));
+%%
+visSearch_easy= find(mytab.search_difficulty(1:exp_startrow)==1);
+visSearch_hard= find(mytab.search_difficulty(1:exp_startrow)==2);
+
+
+clf;
+subplot(221);
+meanRT = [nanmean(mytab.rt(visSearch_easy)), nanmean(mytab.rt(visSearch_hard))];
+bar(meanRT); ylabel('mean RT (msec)'); title('visual search');
+set(gca,'xticklabels', {'easy', 'hard'})
+shg
+
+subplot(222);
+meanAcc = [nanmean(mytab.is_correctBinary(visSearch_easy)), nanmean(mytab.is_correctBinary(visSearch_hard))];
+bar(meanAcc); ylabel('Proportion correct');title('visual search');
+set(gca,'xticklabels', {'easy', 'hard'});shg
+
+
+%% now for the experiment.
+consolidated_rows = find(contains(mytab.stimulus,'consolidated-trial-data'));
+ctable = mytab(consolidated_rows,:);
+% need to do some reordering. 
+% delete the bloat columns, single entries we dont need. 
+del_columns={'trial_type',...
+    'trial_index',...
+    'participant_age',...
+    'participant_gender',...
+    'rt',...
+    'stimulus',...
+    'response',...
+    'task',...
+    'pixels_per_unit',...   
+    'is_correct','is_correctBinary','search_difficulty','enhanced','currentSpanLength',...
+    'originalDigits','reversedDigits','span_length','correct_digits','digit_accuracy','trial_Type','VISsearch_propcorrect',...
+    'VISsearch_meanRT','attention_check_correct','target_button','question_order','image_id','iamge_set'};
+for icol= 1:length(del_columns);
+
+try ctable.([del_columns{icol}])=[];
+catch; disp(['no "' del_columns{icol} '" column']);
+end
+end
+%tidy the order. 
+ctable= movevars(ctable,'block','After',1);
+ctable= movevars(ctable,'trial','After',2);
+ctable=movevars(ctable,'VisDifficulty','After',3);
+ctable=movevars(ctable,'Vis_meanRT','After',4);
+ctable=movevars(ctable,'Vis_propCorr','After',5);
+
+%% now we can calculate average per participant. 
+% total rt and correct on the vis search types: 
+vs_easy = find(ctable.VisDifficulty==1);
+vs_hard = find(ctable.VisDifficulty==2);
+
+clf;
+meanRT = [nanmean(ctable.Vis_meanRT(vs_easy)),nanmean(ctable.Vis_meanRT(vs_hard))];
+meanAcc = [nanmean(ctable.Vis_propCorr(vs_easy)),nanmean(ctable.Vis_propCorr(vs_hard))];
+
+preDSB = [nanmean(ctable.DSBpre_propcorrect(vs_easy)),nanmean(ctable.DSBpre_propcorrect(vs_hard))];
+preDSB_digits = [nanmean(ctable.DSBpre_digitaccuracy(vs_easy)), nanmean(ctable.DSBpre_digitaccuracy(vs_hard))];
+
+postDSB= [nanmean(ctable.DSBpost_propcorrect(vs_easy)),nanmean(ctable.DSBpost_propcorrect(vs_hard))];
+postDSB_digits = [nanmean(ctable.DSBpost_digitaccuracy(vs_easy)),nanmean(ctable.DSBpost_digitaccuracy(vs_hard))];
+
+bothDSB= [preDSB;postDSB];
+bothDSB_digits= [preDSB_digits; postDSB_digits];
+
+subplot(2,2,1);
+bar(meanRT); ylabel('mean vissearch RT')
+set(gca,'xticklabels', {'easy', 'hard'});
+
+subplot(2,2,2); 
+bar(meanAcc);ylabel('mean vissearch Acc');
+ylim([0 1]);
+set(gca,'xticklabels', {'easy', 'hard'});
+
+subplot(2,2,3);
+bar(bothDSB); ylabel('mean DSB (complete)'); 
+set(gca,'xticklabels', {'preDSB', 'postDSB'});
+legend('easy', 'hard');
+ylim([0 1])
+
+subplot(2,2,4);
+bar(bothDSB_digits); ylabel('mean DSB (by digits)'); 
+set(gca,'xticklabels', {'preDSB', 'postDSB'});
+legend('easy', 'hard');
+ylim([0 1])
+
+% subplot(234);
+% bar(postDSB); ylabel('mean postDSB')
+shg
+% plot()
+
+%% now to calculate the pre and post by image type.
+% (vegetation level)
+
+barData=[];
+v_1 = find(ctable.vegetationLevel==1);
+v_2 = find(ctable.vegetationLevel==2);
+v_3 = find(ctable.vegetationLevel==3);
+
+
+clf;
+meanRT = [nanmean(ctable.Vis_meanRT(v_1)),nanmean(ctable.Vis_meanRT(v_2)), nanmean(ctable.Vis_meanRT(v_3))];
+meanAcc = [nanmean(ctable.Vis_propCorr(v_1)),nanmean(ctable.Vis_propCorr(v_2)),nanmean(ctable.Vis_propCorr(v_3))];
+
+preDSB = [nanmean(ctable.DSBpre_propcorrect(v_1)),nanmean(ctable.DSBpre_propcorrect(v_2)),nanmean(ctable.DSBpre_propcorrect(v_3))];
+preDSB_digits = [nanmean(ctable.DSBpre_digitaccuracy(v_1)), nanmean(ctable.DSBpre_digitaccuracy(v_2)),nanmean(ctable.DSBpre_digitaccuracy(v_3))];
+
+postDSB= [nanmean(ctable.DSBpost_propcorrect(v_1)),nanmean(ctable.DSBpost_propcorrect(v_2)), nanmean(ctable.DSBpost_propcorrect(v_3))];
+
+postDSB_digits = [nanmean(ctable.DSBpost_digitaccuracy(v_1)),nanmean(ctable.DSBpost_digitaccuracy(v_2)),nanmean(ctable.DSBpost_digitaccuracy(v_3))];
+
+bothDSB= [preDSB;postDSB];
+bothDSB_digits= [preDSB_digits; postDSB_digits];
+
+subplot(2,2,1);
+bar(meanRT); ylabel('mean vissearch RT')
+set(gca,'xticklabels', {'veg1', 'veg2', 'veg3'});
+
+subplot(2,2,2); 
+bar(meanAcc);ylabel('mean vissearch Acc');
+ylim([0 1]);
+set(gca,'xticklabels', {'veg1', 'veg2', 'veg3'});
+
+subplot(2,2,3);
+bar(bothDSB); ylabel('mean DSB (complete)'); 
+set(gca,'xticklabels', {'preDSB', 'postDSB'});
+legend('veg1', 'veg2', 'veg3');
+ylim([0 1])
+
+subplot(2,2,4);
+bar(bothDSB_digits); ylabel('mean DSB (by digits)'); 
+set(gca,'xticklabels', {'preDSB', 'postDSB'});
+legend('veg1', 'veg2', 'veg3');
+ylim([0 1])
+shg

@@ -108,63 +108,151 @@
   <script src="https://unpkg.com/@jspsych/plugin-survey-likert@1.1.2"></script>
   <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@1.0.0"></script>
   <script src="https://unpkg.com/@jspsych/plugin-call-function@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.1.2"></script>
 
   
 
   <script>
+     //init jspsych and prep for save at study end
+     const jsPsych = initJsPsych({
+            display_element: 'jspsych-experiment',
 
-    //Initialize JsPsych    
-    const jsPsych = initJsPsych({
-        display_element: 'jspsych-experiment',
-        on_finish: function () {
-          console.log("Experiment finished!");
-          //retrieve data
-          const data = jsPsych.data.get();
-          // Generate CSV and JSON data
-          const csvData = data.csv();
-          // Added JSON data for JATOS GUI
-          const jsonData = data.json();
+            on_finish: function () {
+                
+                //for this experiment we have this completion URL from SONA:
+                //"https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=98&credit_token=e9679869caf24c33adb4f8cda89b1dcd&survey_code=XXXX"
+                const completion_str= "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=98&credit_token=e9679869caf24c33adb4f8cda89b1dcd&survey_code="
+                //we need to get the participnant ID from the URL;
+                //this is done in the JATOS upload function below.
 
-          // if not in jatos, show the result on screen.
-          if (typeof jatos === 'undefined') {
-            //dev mode, local, (prob running in macbook/offline), show data on screen.
-            jsPsych.data.displayData(csvData);
-          } else { // upload to jatos and redirect afterwards.
+                //note if not in JATOS redirect to the dfeault local URL
+                const default_url= "http://127.0.0.1:9000/jatos/4/11/results"
+                
+                //if in JATOS (not dev mode), store as a file.                
+                // Get the data from jsPsych                
+                const data = jsPsych.data.get();
+                // Generate CSV and JSON data
+                const csvData = data.csv();
+                // Added JSON data for JATOS GUI
+                const jsonData = data.json();
 
-            //create and upload csv blob first:
-            const csvBlob = new Blob([csvData], { type: 'text/csv' });
-            jatos.uploadResultFile(csvBlob, "experiment-data.csv", function () {
-              console.log("File upload successful");
-              // Submit JSON data using callback approach
-              console.log("Submitting JSON data to JATOS...");
-              
-              jatos.submitResultData(jsonData, function () {
-                console.log("JSON data submitted successfully");
-                // Get participant ID from URL (with defensive checks)
-                var pp_id = "DEFAULT_ID";
-                if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
-                  pp_id = jatos.urlQueryParameters.SONA_ID;
-                  debugLog(`SONA ID is ${pp_id}`);
+                //if in JATOS (not dev mode), store as a file.
+                if (typeof jatos != 'undefined') {
+                    const csvBlob = new Blob([csvData], { type: 'text/csv' });
+
+                    //create and upload csvBlob for easy download
+                    jatos.uploadResultFile(csvBlob, "experiment-data.csv",
+                        function () {
+                            console.log("File upload successful");
+
+                            // Submit JSON data using callback approach
+                            console.log("Submitting JSON data to JATOS...");
+                            jatos.submitResultData(jsonData,
+                                function () {
+                                    console.log("JSON data submitted successfully");
+
+                                    // Get participant ID from URL (with defensive checks)
+                                    var pp_id = "DEFAULT_ID";
+                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                                        pp_id = jatos.urlQueryParameters.SONA_ID;
+                                        debugLog(`SONA ID is ${pp_id}`);
+                                    } else {
+                                        debugLog(`SONA ID not found, using default`);
+                                    }
+
+                                    // Create completion URL for receiving credit
+                                    var completion_url = completion_str + pp_id;
+                                                                        
+                                    if (pp_id === "DEFAULT_ID") { //if not SONA, redirect to local URL
+                                        completion_url = default_url;
+
+                                    }
+
+                                    // Only redirect after both file upload AND data submission
+                                    jatos.endStudyAndRedirect(completion_url);
+                                },
+                                function (error) {
+                                    console.error("Error submitting JSON data:", error);
+
+                                    // Still redirect if JSON submission fails
+                                    var pp_id = "DEFAULT_ID";
+                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                                        pp_id = jatos.urlQueryParameters.SONA_ID;
+                                    }
+
+                                    var completion_url =completion_str+ pp_id;
+                                    // Redirect to local URL if SONA ID not found
+                                    if (pp_id === "DEFAULT_ID") {
+                                        completion_url = default_url;
+                                    }
+                                    jatos.endStudyAndRedirect(completion_url);
+                                }
+                            );
+                        },
+                        function (error) {
+                            // Error callback for file upload
+                            console.error("File upload failed:", error);
+
+                            // Try to submit JSON data even if file upload fails
+                            console.log("Attempting to submit JSON data after file upload failure");
+                            jatos.submitResultData(jsonData,
+                                function () {
+                                    console.log("JSON data submitted despite file upload failure");
+
+                                    // Get participant ID and redirect
+                                    var pp_id = "DEFAULT_ID";
+                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                                        pp_id = jatos.urlQueryParameters.SONA_ID;
+                                    }
+
+                                    var completion_url = completion_str + pp_id;
+                                    if (pp_id === "DEFAULT_ID") {
+                                        completion_url = default_url;
+                                    }
+                                    jatos.endStudyAndRedirect(completion_url);
+                                },
+                                function (error) {
+                                    console.error("Both file upload and JSON submission failed:", error);
+
+                                    // Still redirect if both methods fail
+                                    var pp_id = "DEFAULT_ID";
+                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                                        pp_id = jatos.urlQueryParameters.SONA_ID;
+                                    }
+
+                                    var completion_url = completion_str + pp_id;
+                                    if (pp_id === "DEFAULT_ID") {
+                                        completion_url = default_url;
+                                    }
+                                    jatos.endStudyAndRedirect(completion_url);
+                                }
+                            );
+                        }
+                    );
+
                 } else {
-                  debugLog(`SONA ID not found, using default`);
+                    //dev mode, local, (prob running in macbook/offline), show data on screen.
+                    jsPsych.data.displayData(csvData);
                 }
-                // Create completion URL for receiving credit
-                
-                var completion_url = "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=98&credit_token=e9679869caf24c33adb4f8cda89b1dcd&survey_code" + pp_id;
-                
-                if (pp_id === "DEFAULT_ID") {
-                  completion_url = "http://127.0.0.1:9000/jatos/4/11/results";
-                }
-                // Only redirect after both file upload AND data submission
-                jatos.endStudyAndRedirect(completion_url);
-              },
-              );
             }
-            );
-          }
-        }
-      });
+        });
+
       
+      //Add code to reenter fullscreen if it's exited
+      // This approach monitors if fullscreen is exited and prompts to reenter            
+      document.addEventListener('fullscreenchange', function () {
+        if (!document.fullscreenElement && jsPsych.getProgress().current_trial_global > 1) {
+        // Only show this message if we're past the first couple of trials
+        alert('You have exited fullscreen mode. Please return to fullscreen for the best experience.');
+
+        // Re-enter fullscreen
+        document.documentElement.requestFullscreen().catch(err => {
+          console.log(`Error attempting to enable fullscreen: ${err.message}`);
+          });
+        }
+      }); 
+      
+
     // a better function for debugging: shorthand for console.log()
     function debugLog(message) {
       console.log(`[${new Date().toISOString()}] ${message}`);
@@ -175,8 +263,8 @@
     // Set static and global experiment parameters
     let experimentParams = {
       // Block structure
-      nBlocks: 4, // must be divisible by 2 (corresponding to search difficulties.)
-      nTrials: 9, // per block, note that this is divisible by 3 (per image types), and we will add one no-image per block.
+      nBlocks: 4, //4 must be divisible by 2 (corresponding to search difficulties.)
+      nTrials: 9, // 9per block, note that this is divisible by 3 (per image types), and we will add one no-image per block.
       nPracticeTrials: 2, // this n is reps of both types -same as exp, absent the images.
 
       // Visual search parameters
@@ -192,7 +280,7 @@
 
       // now just using the max.
       maxDigitSpan: 8, //(n-1)
-      digitDuration: 1000, //ms
+      digitDuration: 800, //ms
 
       // Image parameters
       nImages: 9,
@@ -415,6 +503,28 @@
 
     };
 
+
+    const enterFullscreen = {
+    type: jsPsychFullscreen,
+      fullscreen_mode: true,
+      message: `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh;">
+        <div class="experiment-text" style="font-size: ${24 * pixelsPerUnit / 150}px; text-align: center; margin-bottom: 30px;">
+          This experiment will switch to fullscreen mode when you press the button. <br>
+          Please remain in fullscreen mode for the duration of the experiment.
+        </div>
+        </div>`,  
+      choices: 'Enter Fullscreen',
+      button_html: '<button class="standard-button">%choice%</button>',
+      data: { task: 'fullscreen_enter' }
+      };
+
+      const exitFullscreen = {
+        type: jsPsychFullscreen,
+        fullscreen_mode: false,
+        button_label: 'Exit Fullscreen',
+        data: { task: 'fullscreen_exit' }
+      };
+
     const demographicsForm = {
         type: jsPsychSurveyHtmlForm,
         preamble: '<div style="color: white; text-align: center;"><h2>Demographic Information</h2><p>Please provide the following information:</p></div>',
@@ -458,11 +568,25 @@
       type: jsPsychHtmlButtonResponse,
       stimulus: function () {
         const lastRecall = jsPsych.data.get().last(1).values()[0];
-        return lastRecall.is_correct
-          ? "<p style='color:green;'>Correct!</p><p>Good job!</p>"
-          : "<p style='color:red;'>Incorrect.</p><p>Try to recall in the reversed order.</p>";
+        
+        let stimHTML='';
+        if (lastRecall.is_correct){
+          
+         stimHTML= `<div class ="experiment-text"; style="font-size: ${24 * pixelsPerUnit / 150}px;">
+            Correct!<br><br>
+            Good job!
+            </div>`;
+        } else {
+         stimHTML= `<div class ="experiment-text"; style="font-size: ${24 * pixelsPerUnit / 150}px;">
+            Incorrect.<br><br>
+            Try to recall in the reversed order.
+            </div>`;
+        }
+        
+        return stimHTML;
       },
       choices: ['Continue'],
+      button_html: '<button class="standard-button">%choice%</button>',  
       on_finish: function (data) {
           //replace stim with simple placeholder          
           data.task = `feedback`;
@@ -943,23 +1067,26 @@ function createVisualSearchTrial(searchDifficulty) {
     function createRecallTask() {
       return {
         type: jsPsychHtmlButtonResponse,
-        stimulus: `
-        <p>Please recall the digits in reverse order.</p>
-        <div id="response-display" style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; height: 30px;">
-        <!-- Placeholder content with invisible text -->
-        <span style="visibility: hidden;"> 0 </span>
-        </div>       
-        <div id="custom-button-container" style="text-align: center; margin-top: 20px;">
-          ${[...Array(10).keys()]
-            .map(
-              (num) =>
-                `<button class="digit-button" style="font-size: 24px; width: 40px; height: 40px; margin: 5px;" data-value="${num}">${num}</button>`
-            )
-            .join('')}
-        </div>
-        <div style="text-align: center; margin-top: 20px;">
-          <button id="reset-button" style="font-size: 18px; padding: 8px 15px; margin-right: 10px;">Start Over</button>
-          <button id="continue-button" style="font-size: 18px; padding: 8px 15px; display: none;">Continue</button>
+        stimulus: `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh;">
+          <div style="text-align: center; font-size: ${24 * pixelsPerUnit / 150}px;">
+            <p>Please recall the digits in reverse order.</p>
+          </div>
+          <div id="response-display" style="font-size: ${24 * pixelsPerUnit / 150}px; font-weight: bold; text-align: center; margin-bottom: 20px; height: 30px;">
+            <!-- Placeholder content with invisible text -->
+            <span style="visibility: hidden;"> 0 </span>
+          </div>       
+          <div id="custom-button-container" style="text-align: center; margin-top: 20px;">
+            ${[...Array(10).keys()]
+                    .map(
+                      (num) =>
+                        `<button class="digit-button" style="font-size: 24px; width: 40px; height: 40px; margin: 5px;" data-value="${num}">${num}</button>`
+                    )
+                    .join('')}
+          </div>
+          <div style="text-align: center; margin-top: 20px;">
+            <button id="reset-button" style="font-size: 18px; padding: 8px 15px; margin-right: 10px;">Start Over</button>
+            <button id="continue-button" style="font-size: 18px; padding: 8px 15px; display: none;">Continue</button>
+          </div>
         </div>`,
         choices: '',
         prompt: '<p>Click the numbers in the correct order.</p>',
@@ -1378,6 +1505,7 @@ function createVisualSearchTrial(searchDifficulty) {
 
      
       // Add preload
+      timeline.push(enterFullscreen);
       timeline.push(preloadImages);
       
       timeline.push(messages.Welcome);
@@ -1538,6 +1666,7 @@ function createVisualSearchTrial(searchDifficulty) {
       }      
       
       timeline.push(messages.Debriefdoc); 
+      timeline.push(exitFullscreen);
     
       jsPsych.run(timeline);//
 
