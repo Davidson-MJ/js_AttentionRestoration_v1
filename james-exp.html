@@ -554,10 +554,13 @@
         },
         on_finish: function (data) {
             // Log the demographic data
-            let pp_id = jatos.urlQueryParameters.SONA_ID;
-            data.response.pp_id = pp_id;
             console.log("Demographics collected:", data.response);
 
+            // Add to global jsPsych data properties
+            jsPsych.data.addProperties({
+                participant_age: data.response.age,
+                participant_gender: data.response.gender
+            });
         }
     };
 
