@@ -124,10 +124,25 @@
                 const completion_str= "https://uts-psych.sona-systems.com/webstudy_credit.aspx?experiment_id=98&credit_token=e9679869caf24c33adb4f8cda89b1dcd&survey_code="
                 //we need to get the participnant ID from the URL;
                 //this is done in the JATOS upload function below.
-
+                var pp_id = "DEFAULT_ID";
+                if (jatos != 'undefined') {
+                    // Get participant ID from URL (with defensive checks)
+                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+                        pp_id = jatos.urlQueryParameters.SONA_ID;
+                        debugLog(`SONA ID is ${pp_id}`);
+                    } else {
+                        debugLog(`SONA ID not found, using default`);
+                    }
+                } else {
+                    debugLog(`Not in JATOS, using default`);
+                }
                 //note if not in JATOS redirect to the dfeault local URL
                 const default_url= "http://127.0.0.1:9000/jatos/4/11/results"
                 
+                 // determine completion url based on pp_id:
+                // Create completion URL once
+                var completion_url = pp_id === "DEFAULT_ID" ? default_url : completion_str + pp_id;
+
                 //if in JATOS (not dev mode), store as a file.                
                 // Get the data from jsPsych                
                 const data = jsPsych.data.get();
@@ -150,41 +165,12 @@
                             jatos.submitResultData(jsonData,
                                 function () {
                                     console.log("JSON data submitted successfully");
-
-                                    // Get participant ID from URL (with defensive checks)
-                                    var pp_id = "DEFAULT_ID";
-                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
-                                        pp_id = jatos.urlQueryParameters.SONA_ID;
-                                        debugLog(`SONA ID is ${pp_id}`);
-                                    } else {
-                                        debugLog(`SONA ID not found, using default`);
-                                    }
-
-                                    // Create completion URL for receiving credit
-                                    var completion_url = completion_str + pp_id;
-                                                                        
-                                    if (pp_id === "DEFAULT_ID") { //if not SONA, redirect to local URL
-                                        completion_url = default_url;
-
-                                    }
-
                                     // Only redirect after both file upload AND data submission
                                     jatos.endStudyAndRedirect(completion_url);
                                 },
                                 function (error) {
                                     console.error("Error submitting JSON data:", error);
 
-                                    // Still redirect if JSON submission fails
-                                    var pp_id = "DEFAULT_ID";
-                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
-                                        pp_id = jatos.urlQueryParameters.SONA_ID;
-                                    }
-
-                                    var completion_url =completion_str+ pp_id;
-                                    // Redirect to local URL if SONA ID not found
-                                    if (pp_id === "DEFAULT_ID") {
-                                        completion_url = default_url;
-                                    }
                                     jatos.endStudyAndRedirect(completion_url);
                                 }
                             );
@@ -195,35 +181,16 @@
 
                             // Try to submit JSON data even if file upload fails
                             console.log("Attempting to submit JSON data after file upload failure");
+                            
                             jatos.submitResultData(jsonData,
                                 function () {
                                     console.log("JSON data submitted despite file upload failure");
 
-                                    // Get participant ID and redirect
-                                    var pp_id = "DEFAULT_ID";
-                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
-                                        pp_id = jatos.urlQueryParameters.SONA_ID;
-                                    }
-
-                                    var completion_url = completion_str + pp_id;
-                                    if (pp_id === "DEFAULT_ID") {
-                                        completion_url = default_url;
-                                    }
                                     jatos.endStudyAndRedirect(completion_url);
                                 },
                                 function (error) {
                                     console.error("Both file upload and JSON submission failed:", error);
 
-                                    // Still redirect if both methods fail
-                                    var pp_id = "DEFAULT_ID";
-                                    if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
-                                        pp_id = jatos.urlQueryParameters.SONA_ID;
-                                    }
-
-                                    var completion_url = completion_str + pp_id;
-                                    if (pp_id === "DEFAULT_ID") {
-                                        completion_url = default_url;
-                                    }
                                     jatos.endStudyAndRedirect(completion_url);
                                 }
                             );
@@ -238,19 +205,19 @@
         });
 
       
-      //Add code to reenter fullscreen if it's exited
-      // This approach monitors if fullscreen is exited and prompts to reenter            
-      document.addEventListener('fullscreenchange', function () {
-        if (!document.fullscreenElement && jsPsych.getProgress().current_trial_global > 1) {
-        // Only show this message if we're past the first couple of trials
-        alert('You have exited fullscreen mode. Please return to fullscreen for the best experience.');
+      // //Add code to reenter fullscreen if it's exited
+      // // This approach monitors if fullscreen is exited and prompts to reenter            
+      // document.addEventListener('fullscreenchange', function () {
+      //   if (!document.fullscreenElement && jsPsych.getProgress().current_trial_global > 1) {
+      //   // Only show this message if we're past the first couple of trials
+      //   alert('You have exited fullscreen mode. Please return to fullscreen for the best experience.');
 
-        // Re-enter fullscreen
-        document.documentElement.requestFullscreen().catch(err => {
-          console.log(`Error attempting to enable fullscreen: ${err.message}`);
-          });
-        }
-      }); 
+      //   // Re-enter fullscreen
+      //   document.documentElement.requestFullscreen().catch(err => {
+      //     console.log(`Error attempting to enable fullscreen: ${err.message}`);
+      //     });
+      //   }
+      // }); 
       
 
     // a better function for debugging: shorthand for console.log()
@@ -284,7 +251,7 @@
 
       // Image parameters
       nImages: 9,
-      imgDuration: 15000, //ms 
+      imgDuration: 10000, //ms 
 
       // Attention check parameters
       attentionCheckFrequency: 0.1, // 10% chance per trial
@@ -554,9 +521,24 @@
         },
         on_finish: function (data) {
             // Log the demographic data
-            let pp_id = jatos.urlQueryParameters.SONA_ID;
-            data.response.pp_id = pp_id;
+            
             console.log("Demographics collected:", data.response);
+            // Get participant ID from URL (with defensive checks)
+            var pp_id = "DEFAULT_ID";
+          if (typeof jatos !== 'undefined') {
+            if (jatos.urlQueryParameters && jatos.urlQueryParameters.SONA_ID) {
+              pp_id = jatos.urlQueryParameters.SONA_ID;
+              debugLog(`SONA ID is ${pp_id}`);
+            } else {
+              debugLog(`SONA ID not found, using default`);
+            }
+          } else {
+            debugLog(`Not in JATOS, using default`);
+          }
+
+
+            data.response.id= pp_id;
+
 
         }
     };
@@ -711,7 +693,7 @@
         data: {
           task: 'rate-AI'  ,
           image_id: imgNumber,        
-          iamge_set: setN
+          image_set: setN
         },
         // Add custom styling for white text
         on_load: function () {
@@ -1661,9 +1643,9 @@ function createVisualSearchTrial(searchDifficulty) {
       for (let imgn = 1; imgn < 10; imgn++) {
         timeline.push(createRateAIlikelihood(imgn,1));
       }      
-      
-      timeline.push(messages.Debriefdoc); 
       timeline.push(exitFullscreen);
+      timeline.push(messages.Debriefdoc); 
+      
     
       jsPsych.run(timeline);//
 
