@@ -56,6 +56,7 @@ mytab= movevars(mytab,'is_correctBinary','After','is_correct');
 %% seems the conversion to matlab struggles when parsing the JSON strings that
 % make the responses to survey data (PRS etc). The data is visible in the
 % CSV, but not mytab.
+
 % Read the CSV file using fopen/textscan for more control
 fid = fopen(pfols(ippant).name);
 
