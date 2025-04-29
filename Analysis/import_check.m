@@ -4,10 +4,10 @@
 jobs=[];
 jobs.import_wrangle=1;
 %
-jobs.plot_PP_summary=0;
+jobs.plot_PP_summary=1;
 
 
-jobs.createGFX_table =1;
+jobs.createGFX_table =0;
 
 
 cd('/Users/164376/Documents/GitHub/js_AttentionRestoration_v1/Analysis/');
@@ -525,8 +525,8 @@ shg
 % use the flist from above.
 compareIVs= {[1,2],... % easy vs hard
     [3,4,5,6],... % veg levels 
-    [7,8,9],... %imReal,AI, fix }
-    [10:19]};%, ...% all im.
+    [15,16,17],... %imReal,AI, fix }
+    [18:27]};%, ...% all im.
     % [20:29], ...% all imE.
     % [30:39]}; % ...% all imH.
 
@@ -626,6 +626,8 @@ end % end ppant
 % thinking mean +- SD
 
 nCreate = 10; 
+GFX_table_Pseudo = GFX_table;
+
 
 for idata= 1:nCreate
 % take the average of real (per field), and then add some jitter.
@@ -653,11 +655,105 @@ for idata= 1:nCreate
     end
 
     % now add to GFXtable:
-    GFX_table = [GFX_table; pnew];
+    GFX_table_Pseudo = [GFX_table_Pseudo; pnew];
 
 end
 
 %% export
 writetable(GFX_table, 'GFX_table_Pseudo.csv')
+writetable(GFX_table, 'GFX_table.csv')
+end
+
+if job.plotGFX==1
+
+% plot the current estimate of Group effects, using format above, but adding errorbars.
+set(gcf,'color','w', 'units','normalized','position', [0 0 1 1]); clf
+shg
+%
+nppants= height(GFX_table);
+% first plot VS split by easy/hard
+% use the flist from above.
+compareIVs= {[1,2],... % easy vs hard
+    [3,4,5,6],... % veg levels 
+    [15,16,17],... %imReal,AI, fix }
+    [18:27]};%, ...% all im.
+    % [20:29], ...% all imE.
+    % [30:39]}; % ...% all imH.
+
+
+for icompare = 1:length(compareIVs);
+
+    fieldindx = compareIVs{icompare};
+   
+    % reset bar data
+    [visAcc, visRT, preDSB, postDSB, diffDSB]= deal([]);
+
+    for ifield = 1:length(fieldindx)
+        
+        visAcc(ifield,:) = GFX_table.(['meanVis_Accuracy_' flist{fieldindx(ifield)}]);
+        visRT(ifield,:) = GFX_table.(['meanVis_RT_' flist{fieldindx(ifield)}]);
+        preDSB(ifield,:) = GFX_table.(['preImgDSBbydigits_' flist{fieldindx(ifield)}]);
+        postDSB(ifield,:) = GFX_table.(['postImgDSBbydigits_' flist{fieldindx(ifield)}]);
+        diffDSB(ifield,:) = GFX_table.(['diffImgDSBbydigits_' flist{fieldindx(ifield)}]);
+    end
+% plot! 
+subplot(length(compareIVs),5,1+ (5*(icompare-1)));
+% yyaxis left 
+bar(1:length(fieldindx),mean(visAcc,2));
+sem= CousineauSEM(visAcc');
+hold on;
+errorbar(1:length(fieldindx), mean(visAcc,2), sem, 'linewidth',2,'color', 'k','LineStyle', 'none') 
+ylabel('Prop. Correct');
+title('Vis search Accuracy')
+set(gca,'XTickLabels', flist(fieldindx), 'fontsize', 15, 'TickLabelInterpreter', 'none')
+%
+subplot(length(compareIVs),5,2+ (5*(icompare-1)));
+bar(1:length(fieldindx), mean(visRT,2));
+hold on;
+sem= CousineauSEM(visRT');
+errorbar(1:length(fieldindx), mean(visRT,2), sem, 'linewidth',2,'color', 'k','LineStyle', 'none') 
+ylabel('RT (ms)')
+title('Vis search RT')
+set(gca,'XTickLabels', flist(fieldindx), 'fontsize', 15, 'TickLabelInterpreter', 'none')
+shg
+
+% DSB pre by VS easy/hard (should be balanced), by digits.
+subplot(length(compareIVs),5,3+ (5*(icompare-1)))
+bar(1:length(fieldindx), mean(preDSB,2));
+hold on;
+sem= CousineauSEM(preDSB');
+errorbar(1:length(fieldindx), mean(preDSB,2), sem, 'linewidth',2,'color', 'k','LineStyle', 'none') 
+ylabel('DSB by digits')
+title('Pre-image DSB')
+set(gca,'XTickLabels', flist(fieldindx), 'fontsize', 15, 'TickLabelInterpreter', 'none')
+ylim([0 1])
+
+subplot(length(compareIVs),5,4+ (5*(icompare-1)))
+bar(1:length(fieldindx), mean(postDSB,2));
+hold on;
+sem= CousineauSEM(postDSB');
+errorbar(1:length(fieldindx), mean(postDSB,2), sem, 'linewidth',2,'color', 'k','LineStyle', 'none') 
+ylabel('DSB by digits');
+title('Post-image DSB');
+set(gca,'XTickLabels', flist(fieldindx), 'fontsize', 15, 'TickLabelInterpreter', 'none')
+ylim([0 1])
+
+subplot(length(compareIVs),5,5+ (5*(icompare-1)))
+bar(1:length(fieldindx), mean(diffDSB,2));
+hold on;
+sem= CousineauSEM(diffDSB');
+errorbar(1:length(fieldindx), mean(diffDSB,2), sem, 'linewidth',2,'color', 'k','LineStyle', 'none') 
+title('Difference in DSB')
+ylabel('\Delta DSB by digits')
+set(gca,'XTickLabels', flist(fieldindx), 'fontsize', 15, 'TickLabelInterpreter', 'none')
+ylim([-.5 .5])
+end
+
+%%
+cd(datadir)
+cd ../Figures
+
+print('-dpng', ['GFX_n=' num2str(nppants) '_summary'])
+
 
 end
